@@ -19,6 +19,7 @@ import type {
   Oee,
   OrderOperation,
   ProductionOrder,
+  Role,
   Routing,
   ScanResult,
   StockLot,
@@ -220,8 +221,21 @@ export const useOee = (days = 1) =>
   useQuery({ queryKey: ['oee', days], queryFn: () => get<Oee[]>('/equipment/oee', { days }), ...LIVE })
 
 // --- users ------------------------------------------------------------------
-export const useUsers = (enabled = true) =>
-  useQuery({ queryKey: ['users'], queryFn: () => get<User[]>('/auth/users'), enabled })
+export interface UserFilters {
+  q?: string
+  role?: Role
+  active?: boolean
+}
+
+export const useUsers = (enabled = true, filters: UserFilters = {}) =>
+  useQuery({
+    queryKey: ['users', filters],
+    queryFn: () => get<User[]>('/auth/users', filters as Record<string, unknown>),
+    enabled,
+    // Keeps the previous rows on screen while a new filter loads, so the table
+    // does not blink through an empty state on every keystroke.
+    placeholderData: (previous) => previous,
+  })
 
 // --- mutations --------------------------------------------------------------
 /**

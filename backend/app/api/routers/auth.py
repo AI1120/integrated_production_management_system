@@ -1,5 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from ...database import get_db
@@ -22,6 +24,11 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> Token:
     if not user.is_active:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "This account is disabled")
 
+    # Naive local time, matching every other stamp the plant records.
+    user.last_login_at = datetime.now()
+    db.commit()
+    db.refresh(user)
+
     token = create_access_token(subject=user.username, role=user.role, user_id=user.id)
     return Token(access_token=token, user=UserRead.model_validate(user))
 
@@ -33,10 +40,28 @@ def me(user: User = Depends(get_current_user)) -> User:
 
 @router.get("/users", response_model=list[UserRead])
 def list_users(
+    q: str | None = Query(default=None, description="Match name, username or badge number"),
+    role: Role | None = Query(default=None),
+    active: bool | None = Query(default=None),
     db: Session = Depends(get_db),
     _: User = Depends(require_roles(Role.ADMIN)),
 ) -> list[User]:
-    return list(db.scalars(select(User).order_by(User.username)))
+    """The account list, narrowed. A plant with three shifts outgrows one page."""
+    stmt = select(User)
+    if q and (needle := q.strip()):
+        pattern = f"%{needle}%"
+        stmt = stmt.where(
+            or_(
+                User.full_name.ilike(pattern),
+                User.username.ilike(pattern),
+                User.badge_no.ilike(pattern),
+            )
+        )
+    if role is not None:
+        stmt = stmt.where(User.role == role)
+    if active is not None:
+        stmt = stmt.where(User.is_active.is_(active))
+    return list(db.scalars(stmt.order_by(User.username)))
 
 
 @router.post("/users", response_model=UserRead, status_code=status.HTTP_201_CREATED)
@@ -47,6 +72,7 @@ def create_user(
 ) -> User:
     if db.scalar(select(User).where(User.username == payload.username)):
         raise HTTPException(status.HTTP_409_CONFLICT, f"Username {payload.username} already exists")
+    _assert_badge_free(db, payload.badge_no)
 
     data = payload.model_dump(exclude={"password"})
     user = User(**data, password_hash=hash_password(payload.password))
@@ -59,6 +85,21 @@ def create_user(
 class PasswordChange(BaseModel):
     current_password: str
     new_password: str = Field(min_length=4)
+
+
+def _assert_badge_free(db: Session, badge: str | None, excluding: int | None = None) -> None:
+    """badge_no is unique in the database; without this the clash surfaces as a
+    500 from the driver instead of telling the administrator whose badge it is."""
+    if badge is None:
+        return
+    stmt = select(User).where(User.badge_no == badge)
+    if excluding is not None:
+        stmt = stmt.where(User.id != excluding)
+    if holder := db.scalar(stmt):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"Badge {badge} already belongs to {holder.full_name} ({holder.username}).",
+        )
 
 
 def _active_admins(db: Session, excluding: int | None = None) -> int:
@@ -80,6 +121,9 @@ def update_user(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
 
     data = payload.model_dump(exclude_unset=True)
+
+    if "badge_no" in data:
+        _assert_badge_free(db, data["badge_no"], excluding=user.id)
 
     # Two ways an administrator can lock the plant out of its own system, both
     # worth refusing rather than explaining afterwards.

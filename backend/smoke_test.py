@@ -581,6 +581,39 @@ def main() -> int:
                      {"current_password": "wrong", "new_password": "whatever"}, token=admin)
     check("changing a password needs the current one", status == 400, "got " + str(status))
 
+    # Signing in is recorded, so dormant accounts are visible.
+    _, me = call("GET", "/auth/me", token=admin, expect=200)
+    check("a sign-in is stamped on the account", me.get("last_login_at") is not None, str(me)[:160])
+
+    status, _ = call("POST", "/auth/login", {"username": "ADMIN", "password": "admin123"})
+    check("the username is not case-sensitive at sign-in", status == 200, "got " + str(status))
+
+    # A badge is unique - the clash has to read as a conflict, not a crash.
+    status, body = call("POST", "/auth/users",
+                        {"username": "badgeclash", "full_name": "Badge Clash", "role": "VIEWER",
+                         "password": "clash123", "badge_no": "B-1001"}, token=admin)
+    check("a duplicate badge is refused", status == 409, "got " + str(status))
+    check("the refusal names the badge holder", "Omar" in str(body), str(body)[:160])
+
+    # Blank is "no badge", not an empty badge that a second person would collide with.
+    status, blank = call("POST", "/auth/users",
+                         {"username": "nobadge", "full_name": "No Badge", "role": "VIEWER",
+                          "password": "none123", "badge_no": "   "}, token=admin)
+    if status == 201:
+        check("a blank badge is stored as no badge", blank["badge_no"] is None, str(blank)[:160])
+
+    # Filters, for a plant whose account list outgrows one screen.
+    _, hits = call("GET", "/auth/users?q=olga", token=admin, expect=200)
+    check("accounts can be searched by name", [u["username"] for u in hits] == ["operator2"], str(hits)[:160])
+    _, hits = call("GET", "/auth/users?q=B-2001", token=admin, expect=200)
+    check("accounts can be searched by badge", len(hits) == 1, str(hits)[:160])
+    _, hits = call("GET", "/auth/users?role=OPERATOR", token=admin, expect=200)
+    check("accounts can be filtered by role",
+          bool(hits) and all(u["role"] == "OPERATOR" for u in hits), str(hits)[:160])
+    _, hits = call("GET", "/auth/users?active=false", token=admin, expect=200)
+    check("accounts can be filtered by state",
+          all(not u["is_active"] for u in hits), str(hits)[:160])
+
     # --- summary ------------------------------------------------------------
     print("\n" + "=" * 60)
     if failures:

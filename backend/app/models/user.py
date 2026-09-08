@@ -1,4 +1,6 @@
-from sqlalchemy import Boolean, String
+from datetime import datetime
+
+from sqlalchemy import Boolean, DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ..database import Base, EnumString, TimestampMixin
@@ -16,3 +18,6 @@ class User(Base, TimestampMixin):
     role: Mapped[Role] = mapped_column(EnumString(Role, 20), default=Role.OPERATOR)
     password_hash: Mapped[str] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Stamped on every successful sign-in, so an administrator can spot the
+    # accounts nobody has used since the plant went live.
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)

@@ -19,7 +19,7 @@ from .api.routers import (
     workflow,
 )
 from .config import settings
-from .database import Base, engine
+from .database import Base, engine, sync_new_columns
 from .models import *  # noqa: F401,F403 - registers every table on Base.metadata
 from .services.inventory_service import StockError
 from .services.production_service import ProductionError
@@ -33,6 +33,7 @@ async def lifespan(_app: FastAPI):
     # create_all is enough for the sample plant; the multi-site rollout should
     # switch to Alembic migrations before the first production deployment.
     Base.metadata.create_all(bind=engine)
+    sync_new_columns()
     logger.info("IPMS ready - plant %s (%s)", settings.plant_code, settings.plant_name)
     yield
 

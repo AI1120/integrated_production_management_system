@@ -21,6 +21,8 @@ export interface User {
   badge_no: string | null
   role: Role
   is_active: boolean
+  /** null until the person has signed in for the first time. */
+  last_login_at: string | null
 }
 
 export interface Item {

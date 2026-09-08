@@ -1,10 +1,11 @@
 """Database engine, session factory and declarative base."""
+import logging
 from collections.abc import Iterator
 from datetime import datetime
 
 from enum import Enum as PyEnum
 
-from sqlalchemy import DateTime, String, TypeDecorator, create_engine, event, func
+from sqlalchemy import DateTime, String, TypeDecorator, create_engine, event, func, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 from .config import settings
@@ -60,6 +61,42 @@ class TimestampMixin:
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
     )
+
+
+def sync_new_columns() -> None:
+    """Add model columns that an existing database file does not have yet.
+
+    ``create_all`` creates missing *tables* but never missing *columns*, so a
+    new nullable field would otherwise raise "no such column" against a
+    database seeded before it existed. This closes that gap for the sample
+    plant; the multi-site rollout should switch to Alembic, which also handles
+    the cases deliberately skipped here (non-nullable columns, renames, type
+    changes).
+    """
+    logger = logging.getLogger("ipms")
+    inspector = inspect(engine)
+    existing_tables = set(inspector.get_table_names())
+
+    for table in Base.metadata.sorted_tables:
+        if table.name not in existing_tables:
+            continue  # create_all() will build it in full
+        present = {column["name"] for column in inspector.get_columns(table.name)}
+        for column in table.columns:
+            if column.name in present:
+                continue
+            # Only additions that are safe to backfill with NULL. Anything else
+            # needs a real migration with a considered default.
+            if not column.nullable or column.primary_key:
+                logger.warning(
+                    "Column %s.%s is missing and cannot be added automatically - reseed or migrate.",
+                    table.name,
+                    column.name,
+                )
+                continue
+            ddl = column.type.compile(engine.dialect)
+            with engine.begin() as connection:
+                connection.execute(text(f"ALTER TABLE {table.name} ADD COLUMN {column.name} {ddl}"))
+            logger.info("Added missing column %s.%s", table.name, column.name)
 
 
 def get_db() -> Iterator[Session]:

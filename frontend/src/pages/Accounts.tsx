@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 
 import { errorMessage } from '../api/client'
 import { useChangeOwnPassword, useCreateUser, useUpdateUser, useUsers } from '../api/hooks'
@@ -6,7 +6,17 @@ import type { Role, User } from '../api/types'
 import { Layout } from '../components/Layout'
 import { Alert, Badge, Card, Empty, Field, Loading, Modal } from '../components/ui'
 import { useAuth } from '../lib/auth'
-import { roleLabel } from '../lib/format'
+import { dateTime, roleLabel, since } from '../lib/format'
+
+/** Hold a fast-changing value still, so typing does not fire a request per keystroke. */
+function useDebounced<T>(value: T, delay = 250): T {
+  const [settled, setSettled] = useState(value)
+  useEffect(() => {
+    const timer = setTimeout(() => setSettled(value), delay)
+    return () => clearTimeout(timer)
+  }, [value, delay])
+  return settled
+}
 
 const ROLES: { key: Role; what: string }[] = [
   { key: 'ADMIN', what: 'Everything, including accounts' },
@@ -29,7 +39,27 @@ const ROLE_TONE: Record<Role, 'good' | 'warn' | 'info' | 'neutral'> = {
 export function Accounts() {
   const { user: me, can } = useAuth()
   const isAdmin = can('ADMIN')
-  const { data: users, isLoading } = useUsers(isAdmin)
+
+  const [search, setSearch] = useState('')
+  const [roleFilter, setRoleFilter] = useState<Role | ''>('')
+  const [statusFilter, setStatusFilter] = useState<'' | 'active' | 'disabled'>('')
+  const debouncedSearch = useDebounced(search)
+
+  const filters = useMemo(
+    () => ({
+      q: debouncedSearch.trim() || undefined,
+      role: roleFilter || undefined,
+      active: statusFilter === '' ? undefined : statusFilter === 'active',
+    }),
+    [debouncedSearch, roleFilter, statusFilter],
+  )
+  const filtered = !!(filters.q || filters.role || filters.active !== undefined)
+
+  const { data: users, isLoading } = useUsers(isAdmin, filters)
+  // The role summary counts the whole plant, so narrowing the table above it
+  // does not silently change what the permissions table appears to say.
+  const { data: everyone } = useUsers(isAdmin)
+
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<User | null>(null)
   const [ownPassword, setOwnPassword] = useState(false)
@@ -99,7 +129,59 @@ export function Accounts() {
             {users && (
               <Card
                 title="People"
-                hint="Deactivating keeps the person's production history intact — accounts are never deleted"
+                hint={
+                  filtered
+                    ? `${users.length} of ${everyone?.length ?? users.length} accounts match`
+                    : "Deactivating keeps the person's production history intact — accounts are never deleted"
+                }
+                actions={
+                  <>
+                    <input
+                      className="sm"
+                      type="search"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      placeholder="Search name, username, badge"
+                      aria-label="Search accounts"
+                      style={{ minWidth: 210 }}
+                    />
+                    <select
+                      className="sm"
+                      value={roleFilter}
+                      onChange={(e) => setRoleFilter(e.target.value as Role | '')}
+                      aria-label="Filter by role"
+                    >
+                      <option value="">All roles</option>
+                      {ROLES.map((role) => (
+                        <option key={role.key} value={role.key}>
+                          {roleLabel(role.key)}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      className="sm"
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value as '' | 'active' | 'disabled')}
+                      aria-label="Filter by state"
+                    >
+                      <option value="">Any state</option>
+                      <option value="active">Active</option>
+                      <option value="disabled">Disabled</option>
+                    </select>
+                    {filtered && (
+                      <button
+                        className="sm"
+                        onClick={() => {
+                          setSearch('')
+                          setRoleFilter('')
+                          setStatusFilter('')
+                        }}
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </>
+                }
                 flush
               >
                 <div className="table-wrap">
@@ -110,6 +192,7 @@ export function Accounts() {
                         <th>Username</th>
                         <th>Role</th>
                         <th>Badge</th>
+                        <th>Last signed in</th>
                         <th>State</th>
                         <th />
                       </tr>
@@ -117,8 +200,8 @@ export function Accounts() {
                     <tbody>
                       {users.length === 0 && (
                         <tr>
-                          <td colSpan={6}>
-                            <Empty>No accounts</Empty>
+                          <td colSpan={7}>
+                            <Empty>{filtered ? 'No accounts match those filters' : 'No accounts'}</Empty>
                           </td>
                         </tr>
                       )}
@@ -133,6 +216,15 @@ export function Accounts() {
                             <Badge tone={ROLE_TONE[account.role]}>{roleLabel(account.role)}</Badge>
                           </td>
                           <td className="code small">{account.badge_no ?? '—'}</td>
+                          <td className="small">
+                            {account.last_login_at ? (
+                              <span className="secondary" title={dateTime(account.last_login_at)}>
+                                {since(account.last_login_at)}
+                              </span>
+                            ) : (
+                              <span className="muted">Never</span>
+                            )}
+                          </td>
                           <td>
                             {account.is_active ? (
                               <Badge tone="good">Active</Badge>
@@ -180,7 +272,7 @@ export function Accounts() {
                         </td>
                         <td className="secondary">{role.what}</td>
                         <td className="num">
-                          {(users ?? []).filter((u) => u.role === role.key && u.is_active).length}
+                          {(everyone ?? []).filter((u) => u.role === role.key && u.is_active).length}
                         </td>
                       </tr>
                     ))}
