@@ -1,0 +1,1265 @@
+<title>IPMS Operating Logic</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,500;1,400&display=swap">
+
+<style>
+:root {
+  color-scheme: light;
+  --ground:      #f6f8f9;
+  --surface:     #ffffff;
+  --surface-2:   #eef2f4;
+  --ink:         #0f1519;
+  --ink-2:       #4a5760;
+  --ink-3:       #78868f;
+  --rule:        #d8dee2;
+  --rule-strong: #b9c3c9;
+  --accent:      #1f5f9e;
+  --accent-soft: #e6eef6;
+  --good:        #1a7f37;
+  --good-soft:   #e6f2e9;
+  --warn:        #9a6207;
+  --warn-soft:   #f8efdc;
+  --crit:        #b3261e;
+  --crit-soft:   #fae9e7;
+  --on-bar:      #ffffff;
+
+  --col: 68ch;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --serif: "IBM Plex Serif", Georgia, "Times New Roman", serif;
+  --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground:      #12161a;
+    --surface:     #1a2027;
+    --surface-2:   #222a32;
+    --ink:         #e8edf1;
+    --ink-2:       #a4b1bb;
+    --ink-3:       #7d8b95;
+    --rule:        #2b343c;
+    --rule-strong: #3d4852;
+    --accent:      #6fb0e8;
+    --accent-soft: #17293a;
+    --good:        #4cb963;
+    --good-soft:   #142b1a;
+    --warn:        #d3a232;
+    --warn-soft:   #2f2612;
+    --crit:        #e5796e;
+    --crit-soft:   #331a17;
+    --on-bar:      #0f1519;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground:      #12161a;
+  --surface:     #1a2027;
+  --surface-2:   #222a32;
+  --ink:         #e8edf1;
+  --ink-2:       #a4b1bb;
+  --ink-3:       #7d8b95;
+  --rule:        #2b343c;
+  --rule-strong: #3d4852;
+  --accent:      #6fb0e8;
+  --accent-soft: #17293a;
+  --good:        #4cb963;
+  --good-soft:   #142b1a;
+  --warn:        #d3a232;
+  --warn-soft:   #2f2612;
+  --crit:        #e5796e;
+  --crit-soft:   #331a17;
+  --on-bar:      #0f1519;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 17px;
+  line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+}
+
+.page {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 24px 96px;
+}
+@media (min-width: 1080px) {
+  .page { grid-template-columns: 210px minmax(0, 1fr); gap: 56px; padding-left: 32px; }
+}
+
+/* ---------- masthead ---------- */
+.masthead {
+  grid-column: 1 / -1;
+  border-bottom: 2px solid var(--ink);
+  padding: 54px 0 22px;
+  margin-bottom: 44px;
+}
+.eyebrow {
+  font-family: var(--sans);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 14px;
+}
+h1 {
+  font-family: var(--sans);
+  font-size: clamp(34px, 5.2vw, 52px);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.04;
+  margin: 0 0 16px;
+  text-wrap: balance;
+}
+.standfirst {
+  font-size: 20px;
+  line-height: 1.5;
+  color: var(--ink-2);
+  max-width: 62ch;
+  margin: 0;
+}
+.masthead-meta {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-3);
+  margin-top: 26px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 26px;
+}
+
+/* ---------- section index ---------- */
+.index { display: none; }
+@media (min-width: 1080px) {
+  .index {
+    display: block;
+    position: sticky;
+    top: 28px;
+    align-self: start;
+    font-family: var(--sans);
+    font-size: 13px;
+    border-top: 1px solid var(--rule);
+    padding-top: 14px;
+  }
+  .index ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+  .index a { color: var(--ink-2); text-decoration: none; display: flex; gap: 10px; line-height: 1.35; }
+  .index a:hover { color: var(--accent); }
+  .index .n { font-family: var(--mono); font-size: 11px; color: var(--ink-3); padding-top: 2px; }
+}
+
+/* ---------- prose ---------- */
+main { min-width: 0; }
+section { margin-bottom: 62px; scroll-margin-top: 24px; }
+section > * { max-width: var(--col); }
+
+h2 {
+  font-family: var(--sans);
+  font-size: 27px;
+  font-weight: 650;
+  letter-spacing: -0.018em;
+  line-height: 1.15;
+  margin: 0 0 6px;
+  text-wrap: balance;
+  display: flex;
+  gap: 14px;
+  align-items: baseline;
+}
+h2 .num {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--accent);
+  flex: none;
+}
+h3 {
+  font-family: var(--sans);
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.005em;
+  margin: 34px 0 8px;
+}
+.deck {
+  color: var(--ink-3);
+  font-family: var(--sans);
+  font-size: 14.5px;
+  margin: 0 0 26px;
+  padding-left: 44px;
+}
+p { margin: 0 0 16px; }
+strong { font-weight: 600; }
+em { font-style: italic; }
+code, .mono {
+  font-family: var(--mono);
+  font-size: 0.87em;
+  background: var(--surface-2);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+ul.plain { margin: 0 0 18px; padding-left: 20px; }
+ul.plain li { margin-bottom: 8px; }
+
+/* ---------- wide panels ---------- */
+.wide { max-width: none; }
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  margin: 26px 0;
+  overflow: hidden;
+}
+.panel-head {
+  font-family: var(--sans);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--surface-2);
+}
+.panel-body { padding: 18px; }
+.panel-body > p:last-child { margin-bottom: 0; }
+
+/* ---------- steps ---------- */
+.step {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  gap: 0 18px;
+  padding: 22px 0;
+  border-top: 1px solid var(--rule);
+  max-width: none;
+}
+.step:last-of-type { border-bottom: 1px solid var(--rule); }
+.step-n {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--surface);
+  background: var(--accent);
+  width: 34px; height: 34px;
+  border-radius: 3px;
+  display: grid;
+  place-items: center;
+}
+.step-body { min-width: 0; max-width: var(--col); }
+.step-body h3 { margin-top: 0; }
+.step-body > *:last-child { margin-bottom: 0; }
+.step-body .wide-in-step { max-width: none; }
+
+/* ---------- tables ---------- */
+.scroll { overflow-x: auto; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--sans);
+  font-size: 13.5px;
+}
+th {
+  text-align: left;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--rule-strong);
+  white-space: nowrap;
+}
+td {
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: baseline;
+}
+tbody tr:last-child td { border-bottom: none; }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--mono); font-size: 12.5px; }
+td.k { font-family: var(--mono); font-size: 12.5px; }
+tr.total td { border-top: 1px solid var(--rule-strong); font-weight: 600; }
+
+/* ---------- callouts ---------- */
+.rule-box {
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  padding: 15px 18px;
+  margin: 22px 0;
+  border-radius: 0 4px 4px 0;
+}
+.rule-box .label {
+  font-family: var(--sans);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  display: block;
+  margin-bottom: 6px;
+}
+.rule-box p { margin: 0; font-size: 16px; }
+
+.formula {
+  font-family: var(--mono);
+  font-size: 13.5px;
+  line-height: 1.85;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 15px 18px;
+  margin: 20px 0;
+  overflow-x: auto;
+  white-space: pre;
+  color: var(--ink);
+}
+.formula .c { color: var(--ink-3); }
+
+/* ---------- flow chain ---------- */
+.flow {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  overflow-x: auto;
+  padding: 4px 0 10px;
+  margin: 22px 0;
+}
+.flow-node {
+  flex: 0 0 auto;
+  min-width: 96px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 3px;
+  background: var(--surface);
+  padding: 9px 10px;
+  font-family: var(--sans);
+}
+.flow-node .t { font-size: 12.5px; font-weight: 600; line-height: 1.25; }
+.flow-node .s { font-size: 10px; color: var(--ink-3); margin-top: 3px; font-family: var(--mono); }
+.flow-arrow {
+  flex: 0 0 auto;
+  align-self: center;
+  color: var(--rule-strong);
+  padding: 0 5px;
+  font-size: 14px;
+}
+.flow-node.gate { border-color: var(--warn); background: var(--warn-soft); }
+.flow-node.out  { border-color: var(--good); background: var(--good-soft); }
+
+/* ---------- state pills ---------- */
+.pills { display: flex; flex-wrap: wrap; gap: 7px; margin: 14px 0 22px; max-width: none; }
+.pill {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--rule-strong);
+  color: var(--ink-2);
+  background: var(--surface);
+}
+.pill.good { border-color: var(--good); color: var(--good); background: var(--good-soft); }
+.pill.warn { border-color: var(--warn); color: var(--warn); background: var(--warn-soft); }
+.pill.crit { border-color: var(--crit); color: var(--crit); background: var(--crit-soft); }
+
+/* ---------- figure ---------- */
+figure { margin: 26px 0; max-width: none; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 12.5px;
+  color: var(--ink-3);
+  margin-top: 10px;
+  max-width: var(--col);
+}
+svg { display: block; max-width: 100%; height: auto; }
+.cascade .lane-label { font-family: var(--sans); font-size: 12px; font-weight: 600; fill: var(--ink-2); }
+.cascade .val { font-family: var(--mono); font-size: 12px; fill: var(--ink); }
+.cascade .tick { font-family: var(--mono); font-size: 11px; fill: var(--ink-3); }
+.cascade .inbar { font-family: var(--mono); font-size: 11px; fill: var(--on-bar); font-weight: 500; }
+.cascade .inbar-dark { font-family: var(--mono); font-size: 11px; fill: var(--ink-2); }
+.cascade .ghost { fill: none; stroke: var(--rule-strong); stroke-width: 1; stroke-dasharray: 3 3; }
+.cascade .bar-sched { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1; }
+.cascade .bar-load { fill: var(--accent); }
+.cascade .bar-run { fill: var(--good); }
+.cascade .bar-loss { fill: var(--crit); }
+
+/* ---------- footer ---------- */
+.colophon {
+  grid-column: 1 / -1;
+  border-top: 2px solid var(--ink);
+  margin-top: 30px;
+  padding-top: 20px;
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-3);
+  max-width: none;
+}
+
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="page">
+
+  <header class="masthead">
+    <div class="eyebrow">Integrated Production Management System</div>
+    <h1>IPMS Operating Logic</h1>
+    <p class="standfirst">
+      How the system reasons about a factory: what it calculates, what it refuses,
+      and why each rule exists. Every figure below is taken from the running
+      sample plant, not invented.
+    </p>
+    <div class="masthead-meta">
+      <span>PLANT-01 · Sample Assembly Factory</span>
+      <span>Worked example: WO-2609-0011</span>
+      <span>Day shift 08:00–17:00, Mon–Fri</span>
+    </div>
+  </header>
+
+  <nav class="index" aria-label="Sections">
+    <ol>
+      <li><a href="#s1"><span class="n">01</span><span>One set of facts</span></a></li>
+      <li><a href="#s2"><span class="n">02</span><span>The plant modelled</span></a></li>
+      <li><a href="#s3"><span class="n">03</span><span>What it must know first</span></a></li>
+      <li><a href="#s4"><span class="n">04</span><span>One order, step by step</span></a></li>
+      <li><a href="#s5"><span class="n">05</span><span>Stock logic</span></a></li>
+      <li><a href="#s6"><span class="n">06</span><span>Quality logic</span></a></li>
+      <li><a href="#s7"><span class="n">07</span><span>OEE logic</span></a></li>
+      <li><a href="#s8"><span class="n">08</span><span>Traceability</span></a></li>
+      <li><a href="#s9opt"><span class="n">09</span><span>Optimisation logic</span></a></li>
+      <li><a href="#s9"><span class="n">10</span><span>Rules it won't break</span></a></li>
+      <li><a href="#s10"><span class="n">11</span><span>What it doesn't decide</span></a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+    <!-- ================= 1 ================= -->
+    <section id="s1">
+      <h2><span class="num">01</span>One set of facts</h2>
+      <p class="deck">Why "integrated" is a claim about data, not about screens.</p>
+
+      <p>
+        Most plants run a scheduling spreadsheet, a stock spreadsheet, a quality
+        folder and a maintenance whiteboard. Each is defensible alone. Together
+        they disagree, because the same event is entered four times by four
+        people at four different moments — and nobody can say which copy is right.
+      </p>
+      <p>
+        IPMS takes the opposite approach. There is one record of each event, and
+        every module is a different <em>reading</em> of it. When an operator books
+        five scrapped units at the test bench, that single entry moves the yield
+        figure, the OEE quality factor, the defect Pareto, the order's remaining
+        quantity and the stock ledger. Not by synchronising four systems — by
+        being one.
+      </p>
+
+      <div class="rule-box">
+        <span class="label">The governing idea</span>
+        <p>
+          A number is never entered twice. Anything that can be derived is derived,
+          and anything derived is derived from the events the floor already
+          recorded for its own reasons.
+        </p>
+      </div>
+
+      <p>
+        That has a cost, and it is worth naming: the system is opinionated. It
+        will refuse entries that a spreadsheet would happily accept. Most of this
+        document is about those refusals, because they are where the logic lives.
+      </p>
+    </section>
+
+    <!-- ================= 2 ================= -->
+    <section id="s2">
+      <h2><span class="num">02</span>The plant modelled</h2>
+      <p class="deck">A small discrete-assembly factory building LED floodlights.</p>
+
+      <p>
+        The sample plant buys castings, LED chips, drivers and lenses; builds LED
+        modules as a sub-assembly; assembles those into finished floodlights;
+        tests them; and packs them. Two finished products, one sub-assembly, nine
+        raw materials, two consumables.
+      </p>
+      <p>
+        Work happens at four <strong>work centres</strong> — preparation, assembly,
+        test, packing — staffed across five machines, on a single day shift
+        running 08:00 to 17:00, Monday to Friday. That shift definition is not
+        decoration; section 07 shows that OEE is meaningless without it.
+      </p>
+
+      <div class="flow wide">
+        <div class="flow-node"><div class="t">Raw store</div><div class="s">WH-RAW</div></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node"><div class="t">Kitting</div><div class="s">OP 10</div></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node"><div class="t">Assembly</div><div class="s">OP 20</div></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node gate"><div class="t">Test</div><div class="s">OP 30 · QC</div></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node"><div class="t">Pack</div><div class="s">OP 40</div></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node gate"><div class="t">Quarantine</div><div class="s">QC-HOLD</div></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node out"><div class="t">Finished</div><div class="s">WH-FG</div></div>
+      </div>
+
+      <p>
+        Operations are numbered <span class="mono">10, 20, 30, 40</span> rather
+        than 1–4. That is the standard shop convention, and it is load-bearing: it
+        leaves room to insert an operation 25 later without renumbering the steps
+        already recorded against every historical order.
+      </p>
+    </section>
+
+    <!-- ================= 3 ================= -->
+    <section id="s3">
+      <h2><span class="num">03</span>What it must know first</h2>
+      <p class="deck">Master data is the system's model of the plant. Everything else is derived from it.</p>
+
+      <p>Before a single unit can be planned, four things must be defined.</p>
+
+      <h3>The part</h3>
+      <p>
+        Every physical thing gets a code, a unit of measure, a standard cost and a
+        safety-stock level. Its <strong>type</strong> decides what it may do: only a
+        finished good or a sub-assembly can be produced. Ask the system to build a
+        raw material and it refuses — that is a data-entry mistake, not a plan.
+      </p>
+
+      <h3>The bill of material — what it is made of</h3>
+      <p>
+        Each line names a component, a quantity per one unit of the parent, and an
+        expected <strong>scrap percentage</strong>. That third number is the one that
+        matters. It is the system's admission that a lens sometimes cracks during
+        fitting: 3% of lenses are expected not to survive, so the kit must carry
+        more than the theoretical count.
+      </p>
+
+      <h3>The routing — how it is made</h3>
+      <p>
+        An ordered list of operations, each on a work centre, each with a
+        <strong>setup time</strong> paid once and a <strong>run rate</strong> paid per
+        unit. An operation may be flagged as requiring inspection, which changes
+        where the finished goods land — see step 9.
+      </p>
+
+      <h3>The calendar and the places</h3>
+      <p>
+        A shift pattern says when the plant intends to produce. Stock locations are
+        <em>typed</em> — raw, work-in-progress, finished, quarantine, scrap — and the
+        system routes material by that type, never by a hard-coded name. Rename
+        <span class="mono">WH-FG</span> tomorrow and nothing breaks.
+      </p>
+
+      <div class="rule-box">
+        <span class="label">Rule</span>
+        <p>
+          One active bill of material and one active routing per part at a time.
+          Activating a new version retires the old one automatically. Two live
+          answers to "how do we build this?" is how plants build the wrong thing.
+        </p>
+      </div>
+    </section>
+
+    <!-- ================= 4 ================= -->
+    <section id="s4">
+      <h2><span class="num">04</span>One order, step by step</h2>
+      <p class="deck">
+        Order WO-2609-0011 — build 80 LED floodlights. Real numbers from the
+        running system, including the scrap it actually suffered.
+      </p>
+
+      <div class="step">
+        <div class="step-n">1</div>
+        <div class="step-body">
+          <h3>The order is created, and requirements are exploded</h3>
+          <p>
+            The planner asks for 80 units. The system reads the active bill of
+            material and calculates what must be picked, inflating every line by
+            its expected scrap:
+          </p>
+          <div class="formula">required = order quantity × quantity per unit × (1 + scrap% ÷ 100)</div>
+          <p>
+            For the screws — 8 per light, 5% expected loss — that is
+            <span class="mono">80 × 8 × 1.05 = 672</span>. Not 640. Those extra
+            32 screws are not waste; they are the difference between the line
+            stopping at 17:40 and not.
+          </p>
+          <div class="panel wide-in-step">
+            <div class="panel-head">Exploded requirement · WO-2609-0011 · 80 units</div>
+            <div class="scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Component</th><th></th>
+                    <th class="n">Per unit</th><th class="n">Scrap</th><th class="n">Required</th>
+                    <th class="n">At op</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td class="k">SA-2001</td><td>LED module assembly</td><td class="n">1</td><td class="n">1%</td><td class="n">80.8</td><td class="n">20</td></tr>
+                  <tr><td class="k">RM-3001</td><td>Aluminium housing</td><td class="n">1</td><td class="n">2%</td><td class="n">81.6</td><td class="n">20</td></tr>
+                  <tr><td class="k">RM-3003</td><td>LED driver 100W</td><td class="n">1</td><td class="n">1%</td><td class="n">80.8</td><td class="n">20</td></tr>
+                  <tr><td class="k">RM-3004</td><td>Tempered glass lens</td><td class="n">1</td><td class="n">3%</td><td class="n">82.4</td><td class="n">20</td></tr>
+                  <tr><td class="k">RM-3005</td><td>Silicone gasket ring</td><td class="n">1</td><td class="n">2%</td><td class="n">81.6</td><td class="n">20</td></tr>
+                  <tr><td class="k">RM-3006</td><td>Mounting bracket</td><td class="n">1</td><td class="n">1%</td><td class="n">80.8</td><td class="n">20</td></tr>
+                  <tr><td class="k">RM-3008</td><td>Screw M4×10</td><td class="n">8</td><td class="n">5%</td><td class="n">672.0</td><td class="n">20</td></tr>
+                  <tr><td class="k">CN-4001</td><td>Shipping carton</td><td class="n">1</td><td class="n">1%</td><td class="n">80.8</td><td class="n">40</td></tr>
+                  <tr><td class="k">CN-4002</td><td>Label set</td><td class="n">1</td><td class="n">2%</td><td class="n">81.6</td><td class="n">40</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <p>
+            Each line also records <em>which operation consumes it</em>. Cartons are
+            not needed at kitting; they are needed at packing. That is what makes a
+            partial kit a sensible thing rather than a mistake.
+          </p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-n">2</div>
+        <div class="step-body">
+          <h3>The recipe is frozen onto the order</h3>
+          <p>
+            The exploded requirement and the routing steps are <strong>copied</strong>
+            onto the order, not referenced. From this moment the order carries its
+            own private recipe.
+          </p>
+          <p>
+            This is the single most consequential design decision in the system.
+            Master data is alive — engineering will revise the routing next month.
+            Production history must be dead. If the order merely pointed at the
+            routing, revising it would silently rewrite what the floor was told to
+            build on every order ever run, and the audit trail would become
+            fiction.
+          </p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-n">3</div>
+        <div class="step-body">
+          <h3>Release: the order becomes real work</h3>
+          <p>
+            A draft order is a plan; nothing may be booked against it. Releasing it
+            does two things: it makes it visible in the shop-floor work queue, and
+            it assigns the <strong>output lot number</strong> —
+            <span class="mono">WO-2609-0011</span> becomes
+            <span class="mono">LOT-2609-0011</span>.
+          </p>
+          <p>
+            Assigning the lot at release rather than at completion means the
+            identity of the batch exists before the first unit does, so every
+            event along the way can be attached to it.
+          </p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-n">4</div>
+        <div class="step-body">
+          <h3>Material is issued, oldest stock first</h3>
+          <p>
+            The warehouse issues against the requirement. Where no specific lot is
+            named, the system picks <strong>oldest received first</strong>, and will
+            split across lots to cover the quantity. A real issue from this plant:
+            101 modules came out of two different batches.
+          </p>
+          <div class="formula"><span class="c">SA-2001 · 101 required</span>
+  51.8  from LOT-2609-0001   <span class="c">(older — emptied first)</span>
+  49.2  from LOT-2609-0003</div>
+          <div class="rule-box">
+            <span class="label">Refusal</span>
+            <p>
+              If available stock cannot cover the full request, the system issues
+              <em>nothing</em> and says what is short. A half-issued kit that reports
+              as issued is worse than a visible shortage: the floor discovers it
+              two hours later, mid-build.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-n">5</div>
+        <div class="step-body">
+          <h3>The floor reports operation 10</h3>
+          <p>
+            An operator books 80 good units through kitting. Two rules govern
+            every such confirmation.
+          </p>
+          <p>
+            <strong>Sequence.</strong> You cannot report operation 20 before
+            operation 10 has released units. Assembly cannot consume kits that
+            were never picked.
+          </p>
+          <p>
+            <strong>Capacity.</strong> Every operation has a ceiling on what it may
+            book. For the first step that ceiling is the order quantity. For every
+            later step it is <em>whatever cleared the step before it</em>.
+          </p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-n">6</div>
+        <div class="step-body">
+          <h3>Loss enters at assembly — and the ceiling moves</h3>
+          <p>
+            At operation 20 the line books 78 good and 2 scrapped. Eighty units
+            were consumed against a ceiling of 80. But only 78 survive, so the
+            ceiling for operation 30 is now 78 — not 80.
+          </p>
+          <p>
+            Test then loses two more. Packing's ceiling becomes 76, it books 76,
+            and the order is complete having produced 76 of the 80 ordered.
+          </p>
+
+          <div class="panel wide-in-step">
+            <div class="panel-head">How loss propagates · WO-2609-0011</div>
+            <div class="scroll">
+              <table>
+                <thead>
+                  <tr><th class="n">Op</th><th>Operation</th><th class="n">Ceiling</th><th class="n">Good</th><th class="n">Scrap</th><th>Why the ceiling</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td class="n">10</td><td>Kitting &amp; housing prep</td><td class="n">80</td><td class="n">80</td><td class="n">0</td><td>order quantity</td></tr>
+                  <tr><td class="n">20</td><td>Main assembly</td><td class="n">80</td><td class="n">78</td><td class="n">2</td><td>80 cleared op 10</td></tr>
+                  <tr><td class="n">30</td><td>Function &amp; photometric test</td><td class="n">78</td><td class="n">76</td><td class="n">2</td><td>78 cleared op 20</td></tr>
+                  <tr><td class="n">40</td><td>Pack &amp; label</td><td class="n">76</td><td class="n">76</td><td class="n">0</td><td>76 cleared op 30</td></tr>
+                  <tr class="total"><td></td><td>Order result</td><td class="n">80</td><td class="n">76</td><td class="n">4</td><td>95% yield</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="rule-box">
+            <span class="label">Why the ceiling must move</span>
+            <p>
+              The obvious rule — "an operation is finished when it has booked the
+              order quantity" — is wrong, and fails silently. The moment one unit is
+              scrapped at assembly, packing can never reach 80, so the operation
+              never completes and the order hangs open forever. Loss has to
+              propagate down the routing, or the model contradicts the factory.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-n">7</div>
+        <div class="step-body">
+          <h3>Only the last step creates finished goods</h3>
+          <p>
+            Operations 10, 20 and 30 move units along the routing. None of them
+            adds to stock. Only the <strong>final</strong> operation books output,
+            because a light that has been assembled but not packed is not a
+            sellable floodlight — it is work in progress.
+          </p>
+          <p>
+            Counting output at every step would multiply production by the number
+            of operations, which is how systems come to report four times the
+            revenue the plant actually made.
+          </p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-n">8</div>
+        <div class="step-body">
+          <h3>Output lands in quarantine, not in the store</h3>
+          <p>
+            The routing flags operation 30 as requiring inspection. Because of
+            that, the 76 finished lights are booked into
+            <span class="mono">QC-HOLD</span> with status
+            <span class="pill warn">QUARANTINE</span>, not into the finished store.
+          </p>
+          <p>
+            Quarantined stock is invisible to every other calculation: it is not
+            on hand, it cannot be picked for another order, it cannot be shipped.
+            The gate is structural rather than procedural — nobody has to remember
+            to hold it.
+          </p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-n">9</div>
+        <div class="step-body">
+          <h3>Inspection decides where the batch goes</h3>
+          <p>
+            An inspector records measurements against the plan. The system judges
+            each one, sets the verdict, and then <em>acts</em> on it — see section 06.
+            A pass moves the batch to the finished store and marks it
+            <span class="pill good">AVAILABLE</span>. A failure marks it
+            <span class="pill crit">REJECTED</span> and raises a non-conformance
+            report automatically.
+          </p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-n">10</div>
+        <div class="step-body">
+          <h3>The order completes itself</h3>
+          <p>
+            Nobody marks the order finished. When every operation has reached its
+            ceiling, the order is complete. Status is re-derived from booked
+            quantities on every confirmation, never incremented — so a correction
+            anywhere on the order leaves the whole order consistent, with no
+            sequence of updates to get wrong.
+          </p>
+          <div class="pills">
+            <span class="pill">DRAFT</span>
+            <span class="pill">→</span>
+            <span class="pill">RELEASED</span>
+            <span class="pill">→</span>
+            <span class="pill warn">IN_PROGRESS</span>
+            <span class="pill">→</span>
+            <span class="pill good">COMPLETED</span>
+            <span class="pill">→</span>
+            <span class="pill">CLOSED</span>
+          </div>
+          <p>
+            Closing is the planner's decision, not the system's — it is an
+            accounting act, taken when the order is done being costed.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 5 ================= -->
+    <section id="s5">
+      <h2><span class="num">05</span>Stock logic</h2>
+      <p class="deck">One ledger, appended to and never edited.</p>
+
+      <p>
+        Every quantity change in the plant — a receipt, an issue, a transfer, a
+        correction, a scrapping — is written as an immutable ledger entry, and the
+        on-hand figure is the consequence. Nothing else is permitted to change a
+        quantity.
+      </p>
+      <p>
+        Corrections are not edits. A miscount is fixed by posting an opposing
+        movement with a stated reason, so the mistake and its correction are both
+        visible. A ledger you can edit is a ledger nobody can trust in an audit.
+      </p>
+
+      <div class="panel">
+        <div class="panel-head">What each movement type does</div>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>Movement</th><th>Takes from</th><th>Adds to</th><th>Meaning</th></tr></thead>
+            <tbody>
+              <tr><td class="k">RECEIPT</td><td>—</td><td>destination</td><td>Goods in from a supplier</td></tr>
+              <tr><td class="k">ISSUE</td><td>source</td><td class="k">—</td><td>Consumed by a work order</td></tr>
+              <tr><td class="k">PRODUCTION_RECEIPT</td><td>—</td><td>destination</td><td>Output booked from the floor</td></tr>
+              <tr><td class="k">TRANSFER</td><td>source</td><td>destination</td><td>Moved between locations</td></tr>
+              <tr><td class="k">SCRAP</td><td>source</td><td class="k">—</td><td>Written off</td></tr>
+              <tr><td class="k">ADJUSTMENT</td><td>—</td><td>signed</td><td>Count correction, reason required</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <p>
+        Two rows there carry real thinking. <strong>Issue takes from a location and
+        adds to nothing.</strong> Material issued to an order has been consumed by
+        that order; it is a cost on the job, not a pile of stock sitting in a
+        work-in-progress bin. Modelling it as a transfer into WIP creates a balance
+        that grows forever because nothing ever relieves it — a classic way for
+        stock systems to drift from the physical floor. The same reasoning applies
+        to scrap.
+      </p>
+      <p>
+        Cost follows the goods. Inbound movements maintain a weighted average per
+        lot, so issuing 101 modules from two batches at different purchase prices
+        charges the order what those specific units actually cost.
+      </p>
+    </section>
+
+    <!-- ================= 6 ================= -->
+    <section id="s6">
+      <h2><span class="num">06</span>Quality logic</h2>
+      <p class="deck">The inspection does not just record a verdict. It enforces one.</p>
+
+      <p>
+        An inspection plan lists characteristics to check. Numeric ones carry a
+        target and limits — luminous flux, 10 000 lm, acceptable between 9 500 and
+        10 500. Attribute ones are judged as observations.
+      </p>
+      <p>
+        When the inspector enters values, the system judges each against its limits
+        and sets the overall result. A single out-of-tolerance measurement fails
+        the batch, as does any rejected quantity. Then four things happen without
+        anyone initiating them:
+      </p>
+
+      <ul class="plain">
+        <li>The verdict is written against the batch and the order.</li>
+        <li>On a pass, the lot leaves quarantine for its proper store — the finished store for a product, the component store for a sub-assembly, because a sub-assembly's next destination is another order.</li>
+        <li>On a failure, the lot is marked rejected, which removes it from on-hand and from every future pick.</li>
+        <li>On a failure, a non-conformance report is raised automatically, carrying the quantity, the batch and the originating inspection.</li>
+      </ul>
+
+      <p>
+        The non-conformance then waits on a human decision — the
+        <strong>disposition</strong> — and each choice has a consequence the system
+        applies immediately. Choosing <span class="mono">SCRAP</span> writes the
+        quantity off stock then and there. The write-off is a consequence of the
+        decision, not a separate task somebody has to remember at month end.
+      </p>
+
+      <div class="rule-box">
+        <span class="label">Why automatic</span>
+        <p>
+          Quality data that only informs is quality data that gets overridden under
+          schedule pressure. Making the verdict move the stock is what stops a
+          failed batch from shipping because somebody was busy.
+        </p>
+      </div>
+    </section>
+
+    <!-- ================= 7 ================= -->
+    <section id="s7">
+      <h2><span class="num">07</span>OEE logic</h2>
+      <p class="deck">Overall Equipment Effectiveness, and the two ways to get it badly wrong.</p>
+
+      <p>
+        OEE multiplies three factors: how much of the intended time the machine was
+        available, how fast it ran while available, and how much of what it made
+        was good. The arithmetic is simple. Deciding what counts as
+        <em>intended time</em> is where the meaning lives.
+      </p>
+
+      <div class="formula">Scheduled   = shift calendar ∩ reporting window
+Loading     = Scheduled − planned stops        <span class="c">breaks, planned maintenance, no work queued</span>
+Run         = Loading   − unplanned stops      <span class="c">breakdowns, changeovers, material shortage</span>
+
+Availability = Run ÷ Loading
+Performance  = (ideal cycle × units) ÷ Run
+Quality      = good ÷ total
+
+OEE = Availability × Performance × Quality</div>
+
+      <h3>Worked from the running plant</h3>
+      <p>
+        Assembly station ASSY-02, over a seven-day window containing five working
+        days of a nine-hour shift:
+      </p>
+
+      <figure class="wide">
+        <svg class="cascade" viewBox="0 0 720 214" role="img" aria-label="Time cascade for ASSY-02: 2700 scheduled minutes reduce to 1727.9 minutes of loading time after planned stops, then to 1657.5 minutes of run time after 70.4 minutes of unplanned stops">
+          <text class="lane-label" x="0" y="16">Scheduled</text>
+          <rect class="bar-sched" x="0" y="24" width="640" height="30" rx="2"/>
+          <text class="inbar-dark" x="10" y="43">5 days x 9 h shift</text>
+          <text class="val" x="650" y="43">2700 min</text>
+
+          <text class="lane-label" x="0" y="80">Loading</text>
+          <rect class="ghost" x="0" y="88" width="640" height="30" rx="2"/>
+          <rect class="bar-load" x="0" y="88" width="409.6" height="30" rx="2"/>
+          <text class="inbar" x="10" y="107">- 972.1 planned (excluded)</text>
+          <text class="val" x="650" y="107">1727.9</text>
+
+          <text class="lane-label" x="0" y="144">Run</text>
+          <rect class="ghost" x="0" y="152" width="640" height="30" rx="2"/>
+          <rect class="bar-run" x="0" y="152" width="392.9" height="30" rx="2"/>
+          <rect class="bar-loss" x="392.9" y="152" width="16.7" height="30"/>
+          <text class="inbar" x="10" y="171">- 70.4 unplanned (the real loss)</text>
+          <text class="val" x="650" y="171">1657.5</text>
+
+          <text class="tick" x="0" y="205">0 min</text>
+          <text class="tick" x="596" y="205">2700 min</text>
+        </svg>
+        <figcaption>
+          Bars drawn to scale against 2700 scheduled minutes. Only the red segment —
+          70.4 minutes — counts against availability.
+        </figcaption>
+      </figure>
+
+      <div class="formula">Availability = 1657.5 ÷ 1727.9        = 95.9%
+Performance  = (195 s × 340) ÷ 1657.5   = 66.7%
+Quality      = 336 good ÷ 340 total     = 98.8%
+
+OEE          = 0.959 × 0.667 × 0.988    = 63.2%</div>
+
+      <h3>Mistake one: measuring against the clock</h3>
+      <p>
+        If scheduled time is taken as wall-clock time, this plant reports
+        <strong>2.8%</strong> OEE — because it counts every night and both weekend
+        days as lost production. Measured against the shift calendar it reports
+        <strong>60%</strong> across the plant, which is the real number. A single-shift
+        factory that measures OEE against 24×7 is measuring the fact that it is not
+        a 24-hour factory.
+      </p>
+
+      <h3>Mistake two: charging idle time to the machine</h3>
+      <p>
+        When no order is queued for a machine, that time is logged against an
+        <em>excluded</em> reason. An idle machine with no demand has not lost
+        anything — that is a sales or planning matter, and burying it in the
+        equipment's score hides both problems at once. The same exclusion applies
+        to breaks and planned maintenance.
+      </p>
+      <p>
+        This is why the downtime Pareto shows only unplanned stops by default. Left
+        in, "no work scheduled" is by far the largest bar and buries every genuine
+        fault beneath it.
+      </p>
+
+      <h3>The number that quietly breaks performance</h3>
+      <p>
+        <strong>Ideal cycle time is a property of the machine, not of the product.</strong>
+        A station running a mix has to carry the volume-weighted best cycle across
+        that mix. Set it from one product and performance is wrong for every other
+        one — which is the usual explanation for a machine that appears to be
+        running at 35% while the operators insist it is running fine. It is the
+        first figure to re-derive whenever the product mix shifts.
+      </p>
+      <p>
+        Performance is also capped at 100%. A machine cannot beat its own ideal
+        cycle; a figure above 100% means the ideal cycle is wrong, and the cap
+        stops that error from inflating the plant's headline number.
+      </p>
+    </section>
+
+    <!-- ================= 8 ================= -->
+    <section id="s8">
+      <h2><span class="num">08</span>Traceability</h2>
+      <p class="deck">The question a recall asks, and the question an audit asks.</p>
+
+      <p>
+        Because the order records which lots it consumed, and the output lot
+        records which order produced it, the chain runs in both directions.
+      </p>
+      <p>
+        <strong>Backwards</strong> — a customer returns a failed floodlight from lot
+        <span class="mono">LOT-2609-0013</span>. The system names the order that
+        built it and every component lot that went into it: which casting batch,
+        which driver batch, which two module batches. Ten component lots, each with
+        the quantity consumed and the moment it was issued.
+      </p>
+      <p>
+        <strong>Forwards</strong> — a supplier reports a defective driver batch. The
+        same links, followed the other way, name every order that consumed it and
+        every finished lot at risk. That is the difference between recalling four
+        batches and recalling everything you shipped last quarter.
+      </p>
+      <p>
+        None of this is a separate traceability feature. It falls out of issuing
+        material against an order and booking output against a lot — things the
+        floor does anyway.
+      </p>
+    </section>
+
+    <!-- ================= 9 optimisation ================= -->
+    <section id="s9opt">
+      <h2><span class="num">09</span>Optimisation logic</h2>
+      <p class="deck">Three constraints, five sequences, and the difference between a plan and a promise.</p>
+
+      <p>
+        Knowing what happened is not the same as knowing what to do next. The
+        optimisation layer takes the open order book and answers three questions:
+        which machine limits output, what running order costs least, and where
+        the money actually goes.
+      </p>
+
+      <h3>Scheduling is constrained, not wished</h3>
+      <p>
+        The scheduler loads every unfinished operation forward onto a real machine
+        under three constraints simultaneously — routing sequence, one job per
+        machine at a time, and the shift calendar. A 95-minute job started at
+        15:58 finishes at 08:33 the next morning, because the plant is shut in
+        between.
+      </p>
+      <p>
+        It is a <em>heuristic</em>, and says so. Finding the provably shortest
+        schedule is NP-hard, and would not survive contact with a floor that
+        re-plans twice a shift. What it gives instead is a defensible answer to
+        "when will this order finish, and which machine is the reason?"
+      </p>
+
+      <h3>The optimisation is the choice of sequence</h3>
+      <p>
+        The same 14 orders, on the same five machines, are then built five times
+        over under different dispatch rules. Nothing physical changes — only the
+        order in which work is released:
+      </p>
+
+      <div class="panel wide">
+        <div class="panel-head">Same order book, five sequences</div>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>Rule</th><th></th><th class="n">Makespan</th><th class="n">Total lateness</th><th class="n">Late</th></tr></thead>
+            <tbody>
+              <tr><td class="k">PRIORITY</td><td>Planner's own number</td><td class="n">37.4 h</td><td class="n">203.2 h</td><td class="n">6</td></tr>
+              <tr><td class="k">EDD</td><td>Earliest due date first</td><td class="n">37.7 h</td><td class="n">161.0 h</td><td class="n">6</td></tr>
+              <tr><td class="k">SPT</td><td>Shortest job first</td><td class="n">47.9 h</td><td class="n">543.7 h</td><td class="n">6</td></tr>
+              <tr><td class="k">LPT</td><td>Longest job first</td><td class="n">37.4 h</td><td class="n">300.6 h</td><td class="n">7</td></tr>
+              <tr><td class="k">CR</td><td>Least slack per hour of work</td><td class="n">38.4 h</td><td class="n">180.1 h</td><td class="n">7</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <p>
+        Releasing in due-date order removes <strong>42 hours of lateness</strong>
+        for nothing but a different sequence. Shortest-job-first — which sounds
+        efficient and is genuinely optimal for average flow time — is the worst
+        option here by a wide margin, because it ignores due dates entirely.
+      </p>
+
+      <div class="rule-box">
+        <span class="label">Why the objective must be stated</span>
+        <p>
+          A plant chasing due dates and a plant chasing throughput want different
+          schedules. The system asks which one you are before it recommends
+          anything, rather than assuming a single definition of "best".
+        </p>
+      </div>
+
+      <h3>Where the constraint actually is</h3>
+      <p>
+        Loaded hours are measured against capacity across the loaded span, not the
+        whole horizon — measure a two-day book against a thirty-day window and
+        every centre reports 6%, hiding the constraint completely. In this plant
+        the test bench runs at 80% while packing runs at 29%: a 51-point spread,
+        and a line balance problem rather than a capacity one.
+      </p>
+      <p>
+        That distinction decides where money goes. Below the constraint threshold
+        the system explicitly says <em>do not buy capacity</em> — the order book is
+        limited by sequencing and queueing. Only 22% of order lead time is actual
+        work; the other 408 hours are queueing between operations. Cutting run
+        times is the expensive way to shorten lead time. Cutting queue is the
+        cheap one.
+      </p>
+
+      <h3>Cost, twice</h3>
+      <p>
+        Every order is costed from master data (what it should have cost) and from
+        the ledger (what it did cost: the lots actually picked, at their actual
+        purchase price, plus the minutes actually confirmed). The gap is the only
+        honest place to look for savings.
+      </p>
+      <p>
+        Scrap is then ranked by <strong>money, not count</strong>. A frequent cheap
+        defect and a rare expensive one are indistinguishable on a count Pareto —
+        here one defect carries 37% of all scrap value from only eight units, and
+        it is not the most frequent one.
+      </p>
+
+      <div class="rule-box">
+        <span class="label">A plan is not a promise</span>
+        <p>
+          The customer due date and the planned dates are separate fields. Applying
+          a schedule rewrites the plan and never the commitment — otherwise the due
+          date becomes the schedule, lateness reads zero, and the system cheerfully
+          reports that it is never late.
+        </p>
+      </div>
+    </section>
+
+    <!-- ================= 10 ================= -->
+    <section id="s9">
+      <h2><span class="num">10</span>Rules it won't break</h2>
+      <p class="deck">Each refusal exists because the alternative corrupts data quietly.</p>
+
+      <div class="panel wide">
+        <div class="panel-head">Enforced invariants</div>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>The system refuses to…</th><th>Because</th></tr></thead>
+            <tbody>
+              <tr><td>Report production against an unreleased order</td><td>A draft is a proposal. Booking against it means the floor is building something nobody approved.</td></tr>
+              <tr><td>Issue material before release</td><td>Stock would leave the store against a job that may never run.</td></tr>
+              <tr><td>Run an operation out of sequence</td><td>Assembly cannot consume kits that were never picked.</td></tr>
+              <tr><td>Book more than cleared the previous step</td><td>Units would be created from nothing, and yield would exceed 100%.</td></tr>
+              <tr><td>Issue a partial kit silently</td><td>A shortage discovered mid-build costs a changeover; a shortage reported at the window costs a phone call.</td></tr>
+              <tr><td>Drive a lot negative</td><td>Negative physical stock does not exist. It means the count is wrong, and that needs an adjustment with a reason.</td></tr>
+              <tr><td>Move a quarantined lot into usable stock</td><td>That is the entire point of the quality gate.</td></tr>
+              <tr><td>Stop a machine without a reason code</td><td>Downtime with no cause cannot be improved, and is invisible on a Pareto.</td></tr>
+              <tr><td>Adjust stock without a stated reason</td><td>The reason is the audit trail. Without it an adjustment is indistinguishable from theft.</td></tr>
+              <tr><td>Cancel an order that has produced output</td><td>The output exists physically. The order must be closed and costed, not erased.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <p>
+        Refusals are worded for the person standing at the terminal, not for a log
+        file: <em>"Insufficient stock: RM-3008 lot L2608-3008-1 has 40 EA, needs 84 EA."</em>
+        An operator can act on that. "Validation error" sends them to find a
+        supervisor.
+      </p>
+
+      <h3>Who may do what</h3>
+      <p>
+        Five working roles — planner, operator, quality, warehouse, administrator —
+        gate the actions that change state. Operators report production and stop
+        machines but cannot alter the bill of material; the warehouse issues stock
+        but does not release orders; quality is the only role that can disposition
+        a non-conformance. The screens hide what a role cannot do, but the server
+        is what enforces it.
+      </p>
+    </section>
+
+    <!-- ================= 10 ================= -->
+    <section id="s10">
+      <h2><span class="num">11</span>What it doesn't decide</h2>
+      <p class="deck">Stated plainly, because an unstated gap becomes an assumption.</p>
+
+      <p>
+        The sample runs one small factory end to end, but it is deliberately not a
+        complete ERP. Four absences matter most for the larger rollout:
+      </p>
+
+      <ul class="plain">
+        <li>
+          <strong>No sequence-dependent setup.</strong> Changeover is a fixed cost
+          per operation. A plant where switching from black to white costs more
+          than the reverse needs a setup matrix before the sequencing advice is
+          trustworthy.
+        </li>
+        <li>
+          <strong>No purchasing or MRP.</strong> The system flags what has fallen
+          below safety stock and what a shortage is blocking. It does not raise a
+          purchase order or plan a replenishment horizon.
+        </li>
+        <li>
+          <strong>No rework routing.</strong> A non-conformance can be dispositioned
+          to rework, but that does not yet generate the rework order to carry it out.
+        </li>
+        <li>
+          <strong>One shift pattern, no labour costing.</strong> The calendar supports
+          multiple and overnight shifts, but there is no screen to manage them, and
+          time is captured per confirmation rather than per operator against a rate.
+        </li>
+      </ul>
+
+      <p>
+        None of these is blocked by the design. The order, the ledger and the
+        calendar are the three things a scheduler, an MRP run and a costing pass
+        would each need, and all three are already in place and populated.
+      </p>
+    </section>
+
+  </main>
+
+  <footer class="colophon">
+    IPMS · Sample Assembly Factory (PLANT-01). Figures drawn from the seeded
+    system: work order WO-2609-0011, lot LOT-2609-0013, machine ASSY-02 over a
+    seven-day window. Operating logic as built.
+  </footer>
+
+</div>

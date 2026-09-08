@@ -1,0 +1,21 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+
+# Node
+node_modules/
+
+# Secrets (.env.example is the committed template)
+.env
+.env.local
+
+# Local database
+*.db
+*.db-shm
+*.db-wal
+
+# Build output / caches
+frontend/dist/
+*.tsbuildinfo
+vite.config.ts.timestamp-*.mjs
