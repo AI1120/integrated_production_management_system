@@ -1,9 +1,9 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from ..enums import OperationStatus, OrderStatus
-from .common import ORMModel
+from .common import ORMModel, to_local_naive
 from .master import ItemRead, WorkCenterRead
 
 
@@ -62,6 +62,8 @@ class ProductionOrderCreate(BaseModel):
     customer_id: int | None = None
     sales_ref: str | None = None
     note: str | None = None
+
+    _local_times = field_validator("planned_start", "planned_end", "due_date")(to_local_naive)
 
 
 class ProductionOrderRead(ORMModel):

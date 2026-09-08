@@ -6,7 +6,7 @@ import { useCreateOrder, useItems, useOrders } from '../api/hooks'
 import type { OrderStatus } from '../api/types'
 import { Layout } from '../components/Layout'
 import { Alert, Card, Empty, Field, Loading, Meter, Modal, OrderBadge } from '../components/ui'
-import { dateTime, qty, toLocalInput } from '../lib/format'
+import { dateTime, qty, toLocalInput, toLocalIso } from '../lib/format'
 import { useAuth } from '../lib/auth'
 
 const STATUSES: (OrderStatus | 'ALL' | 'OPEN')[] = [
@@ -159,8 +159,8 @@ function NewOrderModal({ onClose }: { onClose: () => void }) {
         item_id: Number(itemId),
         qty_ordered: Number(quantity),
         priority: Number(priority),
-        planned_start: start ? new Date(start).toISOString() : null,
-        planned_end: end ? new Date(end).toISOString() : null,
+        planned_start: start ? toLocalIso(new Date(start)) : null,
+        planned_end: end ? toLocalIso(new Date(end)) : null,
         sales_ref: salesRef || null,
       })
       onClose()

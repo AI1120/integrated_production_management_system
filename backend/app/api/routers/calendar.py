@@ -13,7 +13,7 @@ as the same object is how a plant talks itself into believing it is on time.
 from datetime import date, datetime, time, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -21,6 +21,7 @@ from ...enums import OrderStatus, Role
 from ...database import get_db
 from ...models.production import Confirmation, OrderOperation, ProductionOrder
 from ...models.user import User
+from ...schemas.common import to_local_naive
 from ..deps import get_current_user, require_roles
 
 router = APIRouter(prefix="/calendar", tags=["calendar"])
@@ -36,6 +37,10 @@ class CalendarEvent(BaseModel):
     kind: str                     # ACTUAL | PLANNED | DUE
     date: date                    # the day it belongs on
     end_date: date | None = None  # for spans
+    # The real instants behind those dates. Without them an editor can only
+    # guess the time of day, and saving would quietly rewrite the plan.
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
     order_id: int
     order_no: str
     item_code: str
@@ -61,6 +66,8 @@ class RescheduleRequest(BaseModel):
     # has to be asked for explicitly rather than slipping through in a payload.
     move_due_date: bool = False
     reason: str | None = None
+
+    _local_times = field_validator("planned_start", "planned_end", "due_date")(to_local_naive)
 
 
 @router.get("", response_model=CalendarFeed)
@@ -99,6 +106,7 @@ def calendar(
                 order_no=order.order_no,
                 item_code=order.item.code,
                 item_name=order.item.name,
+                ends_at=confirmation.ended_at,
                 title=f"OP {operation.seq} {operation.name}",
                 detail=f"{confirmation.qty_good:g} good{scrap}",
                 status=str(order.status),
@@ -122,6 +130,8 @@ def calendar(
                         kind="PLANNED",
                         date=order.planned_start.date(),
                         end_date=order.planned_end.date(),
+                        starts_at=order.planned_start,
+                        ends_at=order.planned_end,
                         order_id=order.id,
                         order_no=order.order_no,
                         item_code=order.item.code,
@@ -139,6 +149,7 @@ def calendar(
                     id=f"d{order.id}",
                     kind="DUE",
                     date=order.due_date.date(),
+                    starts_at=order.due_date,
                     order_id=order.id,
                     order_no=order.order_no,
                     item_code=order.item.code,
@@ -199,6 +210,8 @@ def reschedule(
         kind="PLANNED",
         date=(order.planned_start or datetime.now()).date(),
         end_date=(order.planned_end or order.planned_start or datetime.now()).date(),
+        starts_at=order.planned_start,
+        ends_at=order.planned_end,
         order_id=order.id,
         order_no=order.order_no,
         item_code=order.item.code,

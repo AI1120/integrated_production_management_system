@@ -7,7 +7,7 @@ import type { CalendarEvent } from '../api/types'
 import { Layout } from '../components/Layout'
 import { Alert, Card, Field, Loading, Modal, OrderBadge } from '../components/ui'
 import { useAuth } from '../lib/auth'
-import { toLocalInput } from '../lib/format'
+import { toLocalInput, toLocalIso } from '../lib/format'
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
@@ -82,8 +82,8 @@ export function CalendarPage() {
       end.setHours(17, 0, 0, 0)
       await reschedule.mutateAsync({
         orderId: moved.order_id,
-        planned_start: start.toISOString(),
-        planned_end: end.toISOString(),
+        planned_start: toLocalIso(start),
+        planned_end: toLocalIso(end),
       })
       setNotice(`${moved.order_no} re-planned to start ${start.toLocaleDateString()}.`)
     } catch (exception) {
@@ -219,16 +219,18 @@ function EventModal({
   const reschedule = useReschedule()
   const cancel = useCancelOrder()
 
-  const [start, setStart] = useState(() => {
-    const d = new Date(`${event.date}T08:00:00`)
-    return toLocalInput(d)
-  })
-  const [end, setEnd] = useState(() => {
-    const d = new Date(`${(event.end_date ?? event.date)}T17:00:00`)
-    return toLocalInput(d)
-  })
+  // Show the plan that exists, not a guess at it. Falling back to 08:00-17:00
+  // only when the order genuinely has no time on it yet.
+  const [start, setStart] = useState(() =>
+    toLocalInput(new Date(event.starts_at ?? `${event.date}T08:00:00`)),
+  )
+  const [end, setEnd] = useState(() =>
+    toLocalInput(new Date(event.ends_at ?? `${event.end_date ?? event.date}T17:00:00`)),
+  )
   const [moveDue, setMoveDue] = useState(event.kind === 'DUE')
-  const [dueDate, setDueDate] = useState(() => toLocalInput(new Date(`${event.date}T17:00:00`)))
+  const [dueDate, setDueDate] = useState(() =>
+    toLocalInput(new Date(event.kind === 'DUE' && event.starts_at ? event.starts_at : `${event.date}T17:00:00`)),
+  )
   const [reason, setReason] = useState('')
   const [localError, setLocalError] = useState<string | null>(null)
 
@@ -240,9 +242,9 @@ function EventModal({
     try {
       await reschedule.mutateAsync({
         orderId: event.order_id,
-        planned_start: moveDue ? undefined : new Date(start).toISOString(),
-        planned_end: moveDue ? undefined : new Date(end).toISOString(),
-        due_date: moveDue ? new Date(dueDate).toISOString() : undefined,
+        planned_start: moveDue ? undefined : toLocalIso(new Date(start)),
+        planned_end: moveDue ? undefined : toLocalIso(new Date(end)),
+        due_date: moveDue ? toLocalIso(new Date(dueDate)) : undefined,
         move_due_date: moveDue,
         reason: moveDue ? reason : undefined,
       })

@@ -261,7 +261,7 @@ const post = async <T,>(url: string, body?: unknown): Promise<T> => (await api.p
 export const useCreateOrder = () =>
   useApiMutation<Record<string, unknown>, ProductionOrder>(
     (body) => post('/production/orders', body),
-    [['orders'], ['dashboard'], ['queue']],
+    [['orders'], ['dashboard'], ['queue'], ['calendar']],
   )
 
 export const useReleaseOrder = () =>
@@ -279,7 +279,9 @@ export const useCloseOrder = () =>
 export const useCancelOrder = () =>
   useApiMutation<number, ProductionOrder>(
     (id) => post(`/production/orders/${id}/cancel`),
-    [['orders'], ['order'], ['queue'], ['dashboard']],
+    // A cancelled order leaves the calendar, which is one of the places it can
+    // be cancelled from - without this the chip stays until a manual reload.
+    [['orders'], ['order'], ['queue'], ['dashboard'], ['calendar']],
   )
 
 export const useIssueMaterial = () =>

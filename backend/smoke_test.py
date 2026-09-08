@@ -12,7 +12,7 @@ import json
 import sys
 import urllib.error
 import urllib.request
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 BASE = (sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8010").rstrip("/")
 TOKENS: dict[str, str] = {}
@@ -553,6 +553,43 @@ def main() -> int:
         status, _ = call("PATCH", "/calendar/orders/" + str(target),
                          {"planned_start": new_start.isoformat()}, token=operator)
         check("operators cannot re-plan from the calendar", status == 403, "got " + str(status))
+
+        # A plan is a wall-clock time on this plant's floor. A client sending the
+        # same instant as UTC must not shift the plan by the machine's offset -
+        # which used to move an 08:00 start and push a 17:00 finish onto the
+        # next day.
+        local_start = (datetime.now() + timedelta(days=4)).replace(
+            hour=8, minute=0, second=0, microsecond=0)
+        local_end = local_start.replace(hour=17)
+        call("PATCH", "/calendar/orders/" + str(target),
+             {"planned_start": local_start.isoformat(), "planned_end": local_end.isoformat()},
+             token=planner, expect=200)
+        _, naive_order = call("GET", "/production/orders/" + str(target), token=planner, expect=200)
+        check("a local plan is stored as sent",
+              naive_order["planned_start"][11:16] == "08:00" and naive_order["planned_end"][11:16] == "17:00",
+              str(naive_order["planned_start"]) + " .. " + str(naive_order["planned_end"]))
+
+        as_utc_start = local_start.astimezone(timezone.utc)
+        as_utc_end = local_end.astimezone(timezone.utc)
+        call("PATCH", "/calendar/orders/" + str(target),
+             {"planned_start": as_utc_start.isoformat(), "planned_end": as_utc_end.isoformat()},
+             token=planner, expect=200)
+        _, utc_order = call("GET", "/production/orders/" + str(target), token=planner, expect=200)
+        check("the same instant sent as UTC lands on the same wall clock",
+              utc_order["planned_start"] == naive_order["planned_start"]
+              and utc_order["planned_end"] == naive_order["planned_end"],
+              str(utc_order["planned_start"]) + " .. " + str(utc_order["planned_end"]))
+        check("an evening finish does not roll onto the next day",
+              utc_order["planned_end"][:10] == local_end.date().isoformat(),
+              str(utc_order["planned_end"]))
+
+        _, feed_now = call("GET", "/calendar?start=" + start + "&end=" + finish,
+                           token=planner, expect=200)
+        planned_now = [e for e in feed_now["events"] if e["id"] == "p" + str(target)]
+        check("the calendar carries the real plan times, not just the day",
+              bool(planned_now) and planned_now[0]["starts_at"] is not None
+              and planned_now[0]["starts_at"][11:16] == "08:00",
+              str(planned_now[:1])[:200])
 
     # Account management, including the two ways to lock everyone out.
     admin = login("admin", "admin123")

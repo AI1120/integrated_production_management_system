@@ -49,6 +49,19 @@ export const toLocalInput = (date: Date): string => {
   return new Date(date.getTime() - offset).toISOString().slice(0, 16)
 }
 
+/**
+ * Local wall-clock time in the shape the API stores: naive, no zone suffix.
+ *
+ * The server records every plant timestamp as naive local time, so sending
+ * toISOString() hands it a UTC wall-clock that it then reads back as local -
+ * shifting a plan by the whole UTC offset, and rolling an evening finish past
+ * midnight onto the following day.
+ */
+export const toLocalIso = (date: Date): string => {
+  const offset = date.getTimezoneOffset() * 60000
+  return new Date(date.getTime() - offset).toISOString().slice(0, 19)
+}
+
 /** Role names for people to read. QC is an acronym, not a word. */
 const ROLE_LABELS: Record<string, string> = {
   ADMIN: 'Admin',

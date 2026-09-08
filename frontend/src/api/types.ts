@@ -622,6 +622,9 @@ export interface CalendarEvent {
   kind: CalendarKind
   date: string
   end_date: string | null
+  /** The real instants behind those dates, so an editor need not assume a time. */
+  starts_at: string | null
+  ends_at: string | null
   order_id: number
   order_no: string
   item_code: string
