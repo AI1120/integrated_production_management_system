@@ -9,6 +9,9 @@ import {
   useEndDowntime,
   useMachines,
   useMaintenance,
+  useCompleteMaintenancePlan,
+  useCreateMaintenancePlan,
+  useMaintenancePlans,
   useOee,
   useSetMachineStatus,
 } from '../api/hooks'
@@ -17,7 +20,7 @@ import { OeeFactors } from '../components/charts'
 import { Layout } from '../components/Layout'
 import { Alert, Card, Empty, Field, Loading, MachineBadge, Meter, Modal } from '../components/ui'
 import { useAuth } from '../lib/auth'
-import { dateTime, duration, pct, qty, since, titleCase } from '../lib/format'
+import { dateOnly, dateTime, duration, pct, qty, since, titleCase, toLocalIso } from '../lib/format'
 
 const OEE_TARGET = 0.85
 const STATUSES: MachineStatus[] = ['IDLE', 'SETUP', 'RUNNING', 'DOWN', 'MAINTENANCE']
@@ -104,6 +107,9 @@ export function Equipment() {
                           <div className="muted small" style={{ marginTop: 3 }}>
                             {openEvent.reason.name}
                           </div>
+                        )}
+                        {machine.available_from && (
+                          <div className="muted small">back {dateTime(machine.available_from)}</div>
                         )}
                       </td>
                       <td className="secondary small">{since(machine.status_since)}</td>
@@ -213,6 +219,7 @@ export function Equipment() {
 
         <div className="grid" style={{ gridTemplateColumns: 'minmax(0, 1.3fr) minmax(0, 1fr)' }}>
           <DowntimeLog />
+          <PreventiveMaintenance />
           <MaintenanceList />
         </div>
       </div>
@@ -270,6 +277,206 @@ function DowntimeLog() {
         </table>
       </div>
     </Card>
+  )
+}
+
+function PreventiveMaintenance() {
+  const { data, isLoading } = useMaintenancePlans()
+  const complete = useCompleteMaintenancePlan()
+  const { can } = useAuth()
+  const [error, setError] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
+
+  if (isLoading) return <Loading />
+  const plans = data ?? []
+  const overdue = plans.filter((plan) => plan.is_overdue).length
+
+  return (
+    <Card
+      title="Preventive maintenance"
+      hint={
+        overdue
+          ? `${overdue} overdue. Planned stops are reserved on the machine, so work is not scheduled through them.`
+          : 'Planned stops are reserved on the machine, so work is not scheduled through them.'
+      }
+      actions={
+        can('PLANNER') ? (
+          <button className="sm" onClick={() => setCreating(true)}>
+            + Plan
+          </button>
+        ) : undefined
+      }
+      flush
+    >
+      {error && <Alert tone="error">{error}</Alert>}
+      <div className="table-wrap" style={{ maxHeight: 420, overflowY: 'auto' }}>
+        <table>
+          <thead>
+            <tr>
+              <th>Service</th>
+              <th>Machine</th>
+              <th className="num">Every</th>
+              <th className="num">Takes</th>
+              <th>Next due</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {plans.length === 0 && (
+              <tr>
+                <td colSpan={6}>
+                  <Empty>No maintenance plans</Empty>
+                </td>
+              </tr>
+            )}
+            {plans.map((plan) => (
+              <tr key={plan.id}>
+                <td>
+                  <span className="strong">{plan.name}</span>
+                  <div className="muted small">
+                    {plan.last_done_at ? `last done ${dateOnly(plan.last_done_at)}` : 'never done'}
+                  </div>
+                </td>
+                <td className="code">{plan.machine.code}</td>
+                <td className="num">{plan.interval_days}d</td>
+                <td className="num">{duration(plan.duration_minutes)}</td>
+                <td>
+                  <span className={`badge ${plan.is_overdue ? 'bad' : 'neutral'}`}>
+                    <span className="dot" /> {dateOnly(plan.next_due_at)}
+                  </span>
+                  {plan.is_overdue && <div className="muted small">overdue</div>}
+                </td>
+                <td className="num">
+                  {can('OPERATOR', 'PLANNER') && (
+                    <button
+                      className="sm"
+                      disabled={complete.isPending}
+                      onClick={async () => {
+                        setError(null)
+                        try {
+                          await complete.mutateAsync({ id: plan.id })
+                        } catch (exception) {
+                          setError(errorMessage(exception))
+                        }
+                      }}
+                    >
+                      Mark done
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {creating && <MaintenancePlanModal onClose={() => setCreating(false)} />}
+    </Card>
+  )
+}
+
+function MaintenancePlanModal({ onClose }: { onClose: () => void }) {
+  const { data: machines } = useMachines()
+  const create = useCreateMaintenancePlan()
+  const [machineId, setMachineId] = useState<number | ''>('')
+  const [name, setName] = useState('')
+  const [intervalDays, setIntervalDays] = useState('30')
+  const [minutes, setMinutes] = useState('60')
+  const [lastDone, setLastDone] = useState('')
+  const [error, setError] = useState<string | null>(null)
+
+  async function submit(event: FormEvent) {
+    event.preventDefault()
+    setError(null)
+    try {
+      await create.mutateAsync({
+        machine_id: Number(machineId),
+        name,
+        interval_days: Number(intervalDays),
+        duration_minutes: Number(minutes),
+        last_done_at: lastDone ? toLocalIso(new Date(lastDone)) : null,
+      })
+      onClose()
+    } catch (exception) {
+      setError(errorMessage(exception))
+    }
+  }
+
+  return (
+    <Modal
+      title="New maintenance plan"
+      onClose={onClose}
+      footer={
+        <>
+          <button onClick={onClose}>Cancel</button>
+          <button
+            className="primary"
+            form="pm-form"
+            type="submit"
+            disabled={!machineId || !name || create.isPending}
+          >
+            {create.isPending ? 'Saving...' : 'Create plan'}
+          </button>
+        </>
+      }
+    >
+      <form id="pm-form" onSubmit={submit} className="stack" style={{ gap: 12 }}>
+        {error && <Alert tone="error">{error}</Alert>}
+        <Field label="Machine">
+          <select
+            value={machineId}
+            onChange={(event) => setMachineId(Number(event.target.value))}
+            required
+            autoFocus
+          >
+            <option value="">Select a machine...</option>
+            {(machines ?? []).map((machine) => (
+              <option key={machine.id} value={machine.id}>
+                {machine.code} - {machine.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Service">
+          <input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="Hydraulic oil change"
+            required
+          />
+        </Field>
+        <div className="row">
+          <div style={{ flex: 1 }}>
+            <Field label="Every" note="days between services">
+              <input
+                type="number"
+                min={1}
+                value={intervalDays}
+                onChange={(event) => setIntervalDays(event.target.value)}
+                required
+              />
+            </Field>
+          </div>
+          <div style={{ flex: 1 }}>
+            <Field label="Takes" note="minutes the machine is out">
+              <input
+                type="number"
+                min={1}
+                value={minutes}
+                onChange={(event) => setMinutes(event.target.value)}
+                required
+              />
+            </Field>
+          </div>
+        </div>
+        <Field label="Last done" note="optional - otherwise the first service is due one interval from today">
+          <input
+            type="datetime-local"
+            value={lastDone}
+            onChange={(event) => setLastDone(event.target.value)}
+          />
+        </Field>
+      </form>
+    </Modal>
   )
 }
 
@@ -333,6 +540,7 @@ function StopModal({ machine, onClose }: { machine: Machine; onClose: () => void
   const [reasonId, setReasonId] = useState<number | ''>('')
   const [status, setStatusValue] = useState<MachineStatus>('DOWN')
   const [note, setNote] = useState('')
+  const [back, setBack] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   async function submit(event: FormEvent) {
@@ -344,6 +552,7 @@ function StopModal({ machine, onClose }: { machine: Machine; onClose: () => void
         status,
         reason_id: Number(reasonId),
         note: note || undefined,
+        available_from: back ? toLocalIso(new Date(back)) : null,
       })
       onClose()
     } catch (exception) {
@@ -390,6 +599,16 @@ function StopModal({ machine, onClose }: { machine: Machine; onClose: () => void
             ))}
           </select>
         </Field>
+        <Field
+          label="Expected back"
+          note="optional - the scheduler stops loading this machine until then"
+        >
+          <input type="datetime-local" value={back} onChange={(event) => setBack(event.target.value)} />
+        </Field>
+        <div className="muted small">
+          Leave it blank for a stop nobody can estimate yet: the machine is then treated as
+          unavailable for the rest of the shift, and work is planned around it.
+        </div>
         <Field label="Note" note="optional">
           <input value={note} onChange={(event) => setNote(event.target.value)} />
         </Field>

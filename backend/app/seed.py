@@ -45,6 +45,7 @@ from .models import (
     Item,
     Location,
     Machine,
+    MaintenancePlan,
     NonConformance,
     Partner,
     Routing,
@@ -102,6 +103,15 @@ MACHINES = [
     ("ASSY-02", "Assembly station 2", "WC-ASSY", 195.0),
     ("TEST-01", "Photometric test rig", "WC-TEST", 60.0),
     ("PACK-01", "Carton sealer", "WC-PACK", 48.0),
+]
+
+#      machine,     what,                          every,  takes,  last done
+MAINTENANCE_PLANS = [
+    ("PRESS-01", "Ram and die inspection", 30, 180.0, 24),
+    ("PRESS-01", "Hydraulic oil change", 90, 240.0, 80),
+    ("ASSY-01", "Torque driver calibration", 60, 90.0, 52),
+    ("TEST-01", "Photometric reference calibration", 30, 120.0, 33),  # already overdue
+    ("PACK-01", "Sealer belt and blade service", 45, 60.0, 20),
 ]
 
 #      code,      name,                       type,               uom,  cost, safety, lead
@@ -266,6 +276,21 @@ def _build_master(db: Session) -> dict:
         )
         db.add(machine)
         ref["machines"][code] = machine
+
+    db.flush()
+
+    # Preventive maintenance, staged so the sample plant shows the full range:
+    # one service already overdue, one due within the week, the rest further out.
+    for machine_code, name, interval, minutes, days_since in MAINTENANCE_PLANS:
+        db.add(
+            MaintenancePlan(
+                machine_id=ref["machines"][machine_code].id,
+                name=name,
+                interval_days=interval,
+                duration_minutes=minutes,
+                last_done_at=datetime.now() - timedelta(days=days_since),
+            )
+        )
 
     for parent_code, lines in BOMS.items():
         bom = Bom(item_id=ref["items"][parent_code].id, version="A", description=f"{parent_code} production BOM")

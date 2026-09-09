@@ -319,6 +319,8 @@ export interface Machine {
   status: MachineStatus
   status_since: string | null
   work_center: WorkCenter
+  /** When a stopped machine is expected back; null while it runs, or when nobody has estimated. */
+  available_from: string | null
 }
 
 export interface DowntimeReason {
@@ -640,4 +642,31 @@ export interface CalendarFeed {
   start: string
   end: string
   events: CalendarEvent[]
+}
+
+export interface MaintenancePlan {
+  id: number
+  machine_id: number
+  name: string
+  interval_days: number
+  duration_minutes: number
+  last_done_at: string | null
+  next_due_at: string
+  is_overdue: boolean
+  is_active: boolean
+  machine: Machine
+}
+
+export interface MaintenanceDue {
+  plan_id: number
+  machine_id: number
+  machine_code: string
+  machine_name: string
+  name: string
+  interval_days: number
+  duration_minutes: number
+  last_done_at: string | null
+  next_due_at: string
+  days_until_due: number
+  is_overdue: boolean
 }

@@ -415,6 +415,70 @@ def main() -> int:
         )
         check("all OEE factors are within 0..1", all(0 <= sample[k] <= 1 for k in ("availability", "performance", "quality")))
 
+    # --- 10b. preventive maintenance and machine availability ----------------
+    print("")
+    print("10b. Preventive maintenance and machine availability")
+    _, plans = call("GET", "/equipment/maintenance-plans", token=planner, expect=200)
+    check("maintenance plans are published", len(plans) > 0, str(len(plans)))
+    check("every plan carries its next due date",
+          all(p.get("next_due_at") for p in plans), str(plans[:1])[:160])
+    check("plans are listed soonest first",
+          [p["next_due_at"] for p in plans] == sorted(p["next_due_at"] for p in plans),
+          str([p["next_due_at"] for p in plans])[:160])
+
+    _, due_soon = call("GET", "/equipment/maintenance-due?within_days=14", token=planner, expect=200)
+    check("the due list is a subset of all plans", len(due_soon) <= len(plans),
+          f"{len(due_soon)} due vs {len(plans)} plans")
+
+    # Completing a service is what moves the next due date.
+    plan = plans[0]
+    _, done = call("POST", f"/equipment/maintenance-plans/{plan['id']}/complete", {},
+                   token=planner, expect=200)
+    check("completing a service moves the next due date",
+          done["next_due_at"] > plan["next_due_at"],
+          f"{plan['next_due_at']} -> {done['next_due_at']}")
+    check("completing a service clears the overdue flag", done["is_overdue"] is False, str(done)[:160])
+    check("a completed service is recorded in maintenance history",
+          any(r["title"].startswith("Preventive:")
+              for r in call("GET", "/equipment/maintenance?open_only=false", token=planner, expect=200)[1]),
+          "no Preventive request found")
+
+    status, _ = call("POST", f"/equipment/maintenance-plans/{plan['id']}/complete",
+                     {"done_at": (datetime.now() + timedelta(days=2)).isoformat()}, token=planner)
+    check("a service cannot be completed in the future", status == 400, f"got {status}")
+
+    # The schedule must not load a machine that cannot run.
+    _, sched_before = call("GET", "/optimization?rule=EDD&horizon_days=30", token=planner, expect=200)
+    ops_before = sched_before["schedule"]["operations"]
+    check("the scheduler still places work", len(ops_before) > 0, str(len(ops_before)))
+
+    busy = next((m for m in call("GET", "/equipment/machines", token=planner, expect=200)[1]
+                 if m["status"] not in ("DOWN", "MAINTENANCE")), None)
+    if busy and any(o["machine_code"] == busy["code"] for o in ops_before):
+        back = (datetime.now() + timedelta(days=6)).replace(microsecond=0)
+        call("POST", f"/equipment/machines/{busy['id']}/status",
+             {"status": "MAINTENANCE", "reason_id": breakdown["id"],
+              "available_from": back.isoformat()}, token=planner, expect=200)
+
+        _, after = call("GET", "/optimization?rule=EDD&horizon_days=30", token=planner, expect=200)
+        on_stopped = [o for o in after["schedule"]["operations"] if o["machine_code"] == busy["code"]]
+        check("no work is scheduled before a stopped machine returns",
+              all(o["start"] >= back.isoformat() for o in on_stopped),
+              str([o["start"] for o in on_stopped][:3]))
+
+        status, _ = call("POST", f"/equipment/machines/{busy['id']}/status",
+                         {"status": "MAINTENANCE", "reason_id": breakdown["id"],
+                          "available_from": (datetime.now() - timedelta(days=1)).isoformat()},
+                         token=planner)
+        check("a return time in the past is refused", status == 400, f"got {status}")
+
+        call("POST", f"/equipment/machines/{busy['id']}/status", {"status": "IDLE"},
+             token=planner, expect=200)
+        _, restored = call("GET", "/equipment/machines", token=planner, expect=200)
+        back_online = next(m for m in restored if m["id"] == busy["id"])
+        check("restarting a machine clears its expected return",
+              back_online["available_from"] is None, str(back_online["available_from"]))
+
     # --- 11. dashboard ------------------------------------------------------
     print("\n11. Dashboard")
     _, dash = call("GET", "/dashboard?days=7", token=planner, expect=200)

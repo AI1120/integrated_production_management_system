@@ -1,7 +1,7 @@
 """Equipment master, downtime capture and the events OEE is calculated from."""
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base, EnumString, TimestampMixin
@@ -19,6 +19,10 @@ class Machine(Base, TimestampMixin):
     ideal_cycle_seconds: Mapped[float] = mapped_column(Float, default=60.0)
     status: Mapped[MachineStatus] = mapped_column(EnumString(MachineStatus, 20), default=MachineStatus.IDLE)
     status_since: Mapped[datetime | None] = mapped_column(DateTime, default=None)
+    # When a stopped machine is expected back. NULL while it is running, and
+    # NULL on a stop nobody has estimated yet - which the scheduler reads as
+    # "do not plan on this machine at all" rather than guessing a return.
+    available_from: Mapped[datetime | None] = mapped_column(DateTime, default=None)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     work_center: Mapped["WorkCenter"] = relationship(back_populates="machines")  # noqa: F821
@@ -65,5 +69,28 @@ class MaintenanceRequest(Base, TimestampMixin):
     status: Mapped[str] = mapped_column(String(20), default="OPEN")
     requested_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), default=None)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)
+
+    machine: Mapped["Machine"] = relationship()
+
+
+class MaintenancePlan(Base, TimestampMixin):
+    """Recurring preventive maintenance on one machine.
+
+    A MaintenanceRequest is raised after something goes wrong. This is the other
+    half: the stop you intend to take, so the scheduler stops loading work
+    across a slot the machine was never going to be available for.
+    """
+
+    __tablename__ = "maintenance_plans"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    machine_id: Mapped[int] = mapped_column(ForeignKey("machines.id"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    # Calendar interval. Run-hours-based intervals are the obvious next step -
+    # OEE already accumulates the run minutes they would need.
+    interval_days: Mapped[int] = mapped_column(Integer, default=30)
+    duration_minutes: Mapped[float] = mapped_column(Float, default=60.0)
+    last_done_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     machine: Mapped["Machine"] = relationship()

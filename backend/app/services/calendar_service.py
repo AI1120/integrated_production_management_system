@@ -59,6 +59,32 @@ def _merge(windows: list[Window]) -> list[Window]:
     return merged
 
 
+def subtract(windows: list[Window], blocks: list[Window]) -> list[Window]:
+    """Production time with ``blocks`` taken out of it.
+
+    A shift calendar says when the *plant* is open; it cannot say when one
+    machine is unavailable. Subtracting a machine's own stoppages - a
+    maintenance slot, a breakdown it has not come back from - gives the time
+    the scheduler may actually load that machine, using the same window
+    arithmetic as everything else.
+    """
+    remaining = [w for w in windows if w[1] > w[0]]
+    for block_start, block_end in blocks:
+        if block_end <= block_start:
+            continue
+        trimmed: list[Window] = []
+        for start, end in remaining:
+            if block_end <= start or block_start >= end:
+                trimmed.append((start, end))
+                continue
+            if start < block_start:
+                trimmed.append((start, block_start))
+            if block_end < end:
+                trimmed.append((block_end, end))
+        remaining = trimmed
+    return remaining
+
+
 def scheduled_minutes(windows: list[Window]) -> float:
     return sum((end - start).total_seconds() / 60.0 for start, end in windows)
 

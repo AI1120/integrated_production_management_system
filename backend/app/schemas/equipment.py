@@ -1,9 +1,9 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from ..enums import DowntimeCategory, MachineStatus
-from .common import ORMModel
+from .common import ORMModel, to_local_naive
 from .master import WorkCenterRead
 
 
@@ -23,6 +23,7 @@ class MachineRead(MachineBase, ORMModel):
     id: int
     status: MachineStatus
     status_since: datetime | None = None
+    available_from: datetime | None = None
     work_center: WorkCenterRead
 
 
@@ -30,6 +31,11 @@ class MachineStatusUpdate(BaseModel):
     status: MachineStatus
     reason_id: int | None = None
     note: str | None = None
+    # When the machine is expected back. Left out on a stop nobody can estimate,
+    # and the scheduler then refuses to plan work onto it rather than guessing.
+    available_from: datetime | None = None
+
+    _local_times = field_validator("available_from")(to_local_naive)
 
 
 class DowntimeReasonBase(BaseModel):
@@ -109,3 +115,57 @@ class OeeRead(BaseModel):
     performance: float
     quality: float
     oee: float
+
+
+class MaintenancePlanBase(BaseModel):
+    machine_id: int
+    name: str = Field(min_length=1, max_length=120)
+    interval_days: int = Field(default=30, ge=1, le=3650)
+    duration_minutes: float = Field(default=60.0, gt=0)
+    is_active: bool = True
+
+
+class MaintenancePlanCreate(MaintenancePlanBase):
+    # Seeding a plan with its last service lets an existing machine come due on
+    # its real schedule instead of one full interval from today.
+    last_done_at: datetime | None = None
+
+    _local_times = field_validator("last_done_at")(to_local_naive)
+
+
+class MaintenancePlanUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    interval_days: int | None = Field(default=None, ge=1, le=3650)
+    duration_minutes: float | None = Field(default=None, gt=0)
+    is_active: bool | None = None
+
+
+class MaintenancePlanRead(MaintenancePlanBase, ORMModel):
+    id: int
+    last_done_at: datetime | None = None
+    next_due_at: datetime
+    is_overdue: bool
+    machine: MachineRead
+
+
+class MaintenancePlanComplete(BaseModel):
+    """Record a service as done, which is what moves the next due date."""
+
+    done_at: datetime | None = None
+    note: str | None = None
+
+    _local_times = field_validator("done_at")(to_local_naive)
+
+
+class MaintenanceDue(BaseModel):
+    plan_id: int
+    machine_id: int
+    machine_code: str
+    machine_name: str
+    name: str
+    interval_days: int
+    duration_minutes: float
+    last_done_at: datetime | None = None
+    next_due_at: datetime
+    days_until_due: float
+    is_overdue: bool

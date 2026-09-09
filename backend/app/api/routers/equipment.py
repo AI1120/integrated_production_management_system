@@ -7,7 +7,13 @@ from sqlalchemy.orm import Session, selectinload
 
 from ...database import get_db
 from ...enums import MachineStatus, Role
-from ...models.equipment import DowntimeEvent, DowntimeReason, Machine, MaintenanceRequest
+from ...models.equipment import (
+    DowntimeEvent,
+    DowntimeReason,
+    Machine,
+    MaintenancePlan,
+    MaintenanceRequest,
+)
 from ...models.user import User
 from ...schemas.equipment import (
     DowntimeEnd,
@@ -18,11 +24,16 @@ from ...schemas.equipment import (
     MachineCreate,
     MachineRead,
     MachineStatusUpdate,
+    MaintenanceDue,
+    MaintenancePlanComplete,
+    MaintenancePlanCreate,
+    MaintenancePlanRead,
+    MaintenancePlanUpdate,
     MaintenanceRequestCreate,
     MaintenanceRequestRead,
     OeeRead,
 )
-from ...services import oee_service
+from ...services import maintenance_service, oee_service
 from ...services.numbering import next_number
 from ..deps import get_current_user, require_roles
 
@@ -77,6 +88,11 @@ def set_machine_status(
 
     now = datetime.now()
     stopped_states = {MachineStatus.DOWN, MachineStatus.MAINTENANCE}
+    if payload.available_from is not None and payload.available_from < now:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "The expected return time is already in the past"
+        )
+
     open_event = db.scalar(
         select(DowntimeEvent)
         .where(DowntimeEvent.machine_id == machine.id, DowntimeEvent.ended_at.is_(None))
@@ -103,6 +119,8 @@ def set_machine_status(
 
     machine.status = payload.status
     machine.status_since = now
+    # Only a stopped machine has something to come back from.
+    machine.available_from = payload.available_from if payload.status in stopped_states else None
     db.commit()
     db.refresh(machine)
     return machine
@@ -205,6 +223,7 @@ def end_downtime(
     machine = db.get(Machine, event.machine_id)
     machine.status = MachineStatus.IDLE
     machine.status_since = ended_at
+    machine.available_from = None
 
     db.commit()
     db.refresh(event)
@@ -251,6 +270,123 @@ def close_maintenance(
     db.commit()
     db.refresh(request)
     return request
+
+
+# --- Preventive maintenance -------------------------------------------------
+def _plan_read(plan: MaintenancePlan) -> dict:
+    """A plan plus the two things nobody wants to work out by hand."""
+    due = maintenance_service.next_due_at(plan)
+    return {
+        **{
+            field: getattr(plan, field)
+            for field in (
+                "id", "machine_id", "name", "interval_days",
+                "duration_minutes", "last_done_at", "is_active", "machine",
+            )
+        },
+        "next_due_at": due,
+        "is_overdue": due < datetime.now(),
+    }
+
+
+@router.get("/maintenance-plans", response_model=list[MaintenancePlanRead])
+def list_maintenance_plans(
+    machine_id: int | None = None,
+    active_only: bool = True,
+    db: Session = Depends(get_db),
+    _: User = AnyUser,
+) -> list[dict]:
+    stmt = select(MaintenancePlan).options(
+        selectinload(MaintenancePlan.machine).selectinload(Machine.work_center)
+    )
+    if machine_id:
+        stmt = stmt.where(MaintenancePlan.machine_id == machine_id)
+    if active_only:
+        stmt = stmt.where(MaintenancePlan.is_active.is_(True))
+    plans = list(db.scalars(stmt))
+    rows = [_plan_read(plan) for plan in plans]
+    rows.sort(key=lambda row: row["next_due_at"])
+    return rows
+
+
+@router.get("/maintenance-due", response_model=list[MaintenanceDue])
+def maintenance_due(
+    within_days: int = 14, db: Session = Depends(get_db), _: User = AnyUser
+) -> list[dict]:
+    """What needs servicing soon - the maintenance planner's working list."""
+    if within_days < 0:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "within_days cannot be negative")
+    return maintenance_service.due_report(db, within_days=within_days)
+
+
+@router.post(
+    "/maintenance-plans", response_model=MaintenancePlanRead, status_code=status.HTTP_201_CREATED
+)
+def create_maintenance_plan(
+    payload: MaintenancePlanCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles(Role.PLANNER)),
+) -> dict:
+    if db.get(Machine, payload.machine_id) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Machine not found")
+    plan = MaintenancePlan(**payload.model_dump())
+    db.add(plan)
+    db.commit()
+    db.refresh(plan)
+    return _plan_read(plan)
+
+
+@router.patch("/maintenance-plans/{plan_id}", response_model=MaintenancePlanRead)
+def update_maintenance_plan(
+    plan_id: int,
+    payload: MaintenancePlanUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles(Role.PLANNER)),
+) -> dict:
+    plan = db.get(MaintenancePlan, plan_id)
+    if plan is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Maintenance plan not found")
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(plan, field, value)
+    db.commit()
+    db.refresh(plan)
+    return _plan_read(plan)
+
+
+@router.post("/maintenance-plans/{plan_id}/complete", response_model=MaintenancePlanRead)
+def complete_maintenance_plan(
+    plan_id: int,
+    payload: MaintenancePlanComplete,
+    db: Session = Depends(get_db),
+    user: User = Maintainer,
+) -> dict:
+    """Record a service as done, which is what moves the next due date."""
+    plan = db.get(MaintenancePlan, plan_id)
+    if plan is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Maintenance plan not found")
+
+    done_at = payload.done_at or datetime.now()
+    if done_at > datetime.now():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "A service cannot be completed in the future")
+
+    plan.last_done_at = done_at
+    # The service really happened, so it belongs in the maintenance history the
+    # same way a request does - otherwise the only trace is a moved due date.
+    db.add(
+        MaintenanceRequest(
+            request_no=next_number(db, "MNT"),
+            machine_id=plan.machine_id,
+            title=f"Preventive: {plan.name}",
+            description=payload.note,
+            priority="NORMAL",
+            status="CLOSED",
+            requested_by_id=user.id,
+            closed_at=done_at,
+        )
+    )
+    db.commit()
+    db.refresh(plan)
+    return _plan_read(plan)
 
 
 # --- OEE --------------------------------------------------------------------

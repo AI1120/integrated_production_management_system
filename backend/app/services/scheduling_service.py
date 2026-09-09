@@ -25,6 +25,7 @@ from ..models.equipment import Machine
 from ..models.master import WorkCenter
 from ..models.production import OrderOperation, ProductionOrder
 from . import calendar_service as cal
+from . import maintenance_service as maint
 
 
 class SchedulingError(Exception):
@@ -193,6 +194,11 @@ def build_schedule(
     for machine in machines:
         by_work_center.setdefault(machine.work_center_id, []).append(machine)
 
+    # Being active is not the same as being able to run. A machine standing
+    # broken, or booked out for a service, has that time removed from its own
+    # calendar - so the schedule stops quietly loading work onto it.
+    loadable = maint.machine_windows(db, machines, windows, now, horizon_end)
+
     work_centers = {wc.id: wc for wc in db.scalars(select(WorkCenter))}
     orders = _sort_orders(open_orders(db), rule, now)
 
@@ -234,14 +240,22 @@ def build_schedule(
             best: tuple[Machine, datetime, datetime] | None = None
             for machine in candidates:
                 earliest = max(previous_end, machine_free[machine.id])
-                slot = cal.place_work(windows, earliest, minutes)
+                slot = cal.place_work(loadable[machine.id], earliest, minutes)
                 if slot is None:
                     continue
                 if best is None or slot[1] < best[2]:
                     best = (machine, slot[0], slot[1])
 
             if best is None:
-                failed = f"does not fit within {horizon_days} days"
+                # Distinguish "the plant is full" from "there is nothing here to
+                # run it on" - they need completely different responses.
+                if all(not loadable[machine.id] for machine in candidates):
+                    failed = (
+                        f"every machine at {operation.work_center.code} is stopped "
+                        f"or booked out for maintenance"
+                    )
+                else:
+                    failed = f"does not fit within {horizon_days} days"
                 break
 
             machine, start, end = best

@@ -1,7 +1,13 @@
 """Import every model so SQLAlchemy can resolve relationships and create_all sees them."""
 from ..database import Base
 from .counter import DocumentCounter
-from .equipment import DowntimeEvent, DowntimeReason, Machine, MaintenanceRequest
+from .equipment import (
+    DowntimeEvent,
+    DowntimeReason,
+    Machine,
+    MaintenancePlan,
+    MaintenanceRequest,
+)
 from .inventory import StockLot, StockMovement
 from .master import Bom, BomLine, Item, Location, Partner, Routing, RoutingOperation, WorkCenter
 from .production import Confirmation, OrderMaterial, OrderOperation, ProductionOrder
@@ -32,6 +38,7 @@ __all__ = [
     "Item",
     "Location",
     "Machine",
+    "MaintenancePlan",
     "MaintenanceRequest",
     "NonConformance",
     "OrderMaterial",

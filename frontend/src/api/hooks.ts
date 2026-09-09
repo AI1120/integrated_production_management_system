@@ -14,6 +14,7 @@ import type {
   Location,
   LotTrace,
   Machine,
+  MaintenancePlan,
   MaintenanceRequest,
   Ncr,
   Oee,
@@ -227,6 +228,32 @@ export interface UserFilters {
   active?: boolean
 }
 
+export const useMaintenancePlans = (machineId?: number) =>
+  useQuery({
+    queryKey: ['maintenance-plans', machineId ?? null],
+    queryFn: () =>
+      get<MaintenancePlan[]>('/equipment/maintenance-plans', machineId ? { machine_id: machineId } : undefined),
+  })
+
+export const useCreateMaintenancePlan = () =>
+  useApiMutation<Record<string, unknown>, MaintenancePlan>(
+    (body) => post('/equipment/maintenance-plans', body),
+    [['maintenance-plans'], ['optimization']],
+  )
+
+export const useUpdateMaintenancePlan = () =>
+  useApiMutation<{ id: number; body: Record<string, unknown> }, MaintenancePlan>(
+    ({ id, body }) => api.patch(`/equipment/maintenance-plans/${id}`, body).then((r) => r.data),
+    [['maintenance-plans'], ['optimization']],
+  )
+
+/** Completing a service moves the next due date, so the schedule changes with it. */
+export const useCompleteMaintenancePlan = () =>
+  useApiMutation<{ id: number; note?: string | null }, MaintenancePlan>(
+    ({ id, ...body }) => post(`/equipment/maintenance-plans/${id}/complete`, body),
+    [['maintenance-plans'], ['maintenance'], ['optimization']],
+  )
+
 export const useUsers = (enabled = true, filters: UserFilters = {}) =>
   useQuery({
     queryKey: ['users', filters],
@@ -333,15 +360,19 @@ export const useUpdateNcr = () =>
   )
 
 export const useSetMachineStatus = () =>
-  useApiMutation<{ id: number; status: string; reason_id?: number; note?: string }, Machine>(
+  useApiMutation<
+    { id: number; status: string; reason_id?: number; note?: string; available_from?: string | null },
+    Machine
+  >(
     ({ id, ...body }) => post(`/equipment/machines/${id}/status`, body),
-    [['machines'], ['downtime'], ['oee'], ['dashboard']],
+    // A stopped machine is capacity the schedule can no longer use.
+    [['machines'], ['downtime'], ['oee'], ['dashboard'], ['optimization']],
   )
 
 export const useEndDowntime = () =>
   useApiMutation<number, DowntimeEvent>(
     (id) => post(`/equipment/downtime/${id}/end`, {}),
-    [['machines'], ['downtime'], ['oee'], ['dashboard']],
+    [['machines'], ['downtime'], ['oee'], ['dashboard'], ['optimization']],
   )
 
 export const useCreateMaintenance = () =>
