@@ -817,7 +817,22 @@ details[open] > .wf-summary::before { content: "▾ "; }
 .cal-chip[draggable="true"] { cursor: grab; }
 .cal-chip[draggable="true"]:active { cursor: grabbing; }
 .cal-chip:hover { filter: brightness(0.96); }
-.cal-more { font-size: 10px; color: var(--text-muted); padding-left: 2px; }
+/* A real control, not a label: it folds the rest of a busy day into view. */
+.cal-more {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 1px 2px;
+  background: none;
+  border: none;
+  border-radius: 3px;
+  text-align: left;
+  justify-content: flex-start;
+  width: 100%;
+  cursor: pointer;
+}
+.cal-more:hover { color: var(--text-primary); background: var(--surface-2); }
+.cal-more:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 .cal-legend { display: flex; gap: 12px; font-size: 11.5px; color: var(--text-secondary); }
 .cal-legend .key { display: inline-flex; align-items: center; gap: 5px; }

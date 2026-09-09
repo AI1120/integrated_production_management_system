@@ -1,4 +1,4 @@
-import { useMemo, useState, type DragEvent, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type DragEvent, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { errorMessage } from '../api/client'
@@ -10,6 +10,19 @@ import { useAuth } from '../lib/auth'
 import { toLocalInput, toLocalIso } from '../lib/format'
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+/** Chips shown in a day cell before the rest are folded behind "+n more". */
+const DAY_CHIP_LIMIT = 4
+
+/**
+ * What a planner needs to see first when a day is too full to show everything.
+ *
+ * The feed lists history before plans, so a busy day used to fill its four
+ * slots with confirmations from one finished order and hide every order that
+ * could still be acted on. Deadlines lead, then the plan, then what is already
+ * done and cannot change.
+ */
+const KIND_RANK: Record<CalendarEvent['kind'], number> = { DUE: 0, PLANNED: 1, ACTUAL: 2 }
 
 /** Local YYYY-MM-DD. toISOString() would shift the day for anyone east of UTC. */
 const iso = (d: Date) =>
@@ -37,8 +50,10 @@ export function CalendarPage() {
   const [dragging, setDragging] = useState<CalendarEvent | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  const [expandedDays, setExpandedDays] = useState<ReadonlySet<string>>(() => new Set())
 
   const days = useMemo(() => monthGrid(anchor), [anchor])
+  useEffect(() => setExpandedDays(new Set()), [anchor])
   const { data, isLoading } = useCalendar(iso(days[0]), iso(days[days.length - 1]))
   const reschedule = useReschedule()
 
@@ -54,6 +69,8 @@ export function CalendarPage() {
         map.get(key)!.push(event)
       }
     }
+    // Stable sort, so events of the same kind keep the feed's chronological order.
+    for (const list of map.values()) list.sort((a, b) => KIND_RANK[a.kind] - KIND_RANK[b.kind])
     return map
   }, [data])
 
@@ -85,7 +102,18 @@ export function CalendarPage() {
         planned_start: toLocalIso(start),
         planned_end: toLocalIso(end),
       })
-      setNotice(`${moved.order_no} re-planned to start ${start.toLocaleDateString()}.`)
+      // The promise deliberately stays put, which leaves a due chip behind on
+      // the old date. Say so, or it reads as the order failing to move.
+      const promise = (data?.events ?? []).find(
+        (candidate) => candidate.kind === 'DUE' && candidate.order_id === moved.order_id,
+      )
+      setNotice(
+        promise
+          ? `${moved.order_no} re-planned to start ${start.toLocaleDateString()}. Its customer due date (${new Date(
+              `${promise.date}T00:00:00`,
+            ).toLocaleDateString()}) has not moved — open that ◆ to re-promise it.`
+          : `${moved.order_no} re-planned to start ${start.toLocaleDateString()}.`,
+      )
     } catch (exception) {
       setError(errorMessage(exception))
     }
@@ -120,7 +148,7 @@ export function CalendarPage() {
           title={monthLabel}
           hint={
             can('PLANNER')
-              ? 'Drag a planned order to re-plan it. Click any item to open it.'
+              ? 'Drag a planned order to re-plan it — its ◆ due date stays where it is until you re-promise it. Click any item to open it.'
               : 'Click any item to open it.'
           }
           actions={
@@ -132,7 +160,7 @@ export function CalendarPage() {
                 <span className="chip planned" /> Planned
               </span>
               <span className="key">
-                <span className="chip due" /> Due
+                <span className="chip due" /> Due (promise)
               </span>
             </div>
           }
@@ -162,7 +190,7 @@ export function CalendarPage() {
                   >
                     <div className="cal-date">{day.getDate()}</div>
                     <div className="cal-events">
-                      {events.slice(0, 4).map((event) => (
+                      {(expandedDays.has(key) ? events : events.slice(0, DAY_CHIP_LIMIT)).map((event) => (
                         <button
                           key={`${event.id}-${key}`}
                           className={`cal-chip ${event.kind.toLowerCase()}`}
@@ -173,14 +201,33 @@ export function CalendarPage() {
                           title={`${event.title}${event.detail ? ` — ${event.detail}` : ''}`}
                         >
                           {event.kind === 'DUE' ? '◆ ' : ''}
-                          {event.kind === 'ACTUAL' ? event.order_no.replace('WO-', '') : event.order_no.replace('WO-', '')}
+                          {event.order_no.replace('WO-', '')}
                           <span className="cal-chip-sub">
-                            {event.kind === 'ACTUAL' ? event.title.replace(/^OP /, 'op') : event.item_code}
+                            {event.kind === 'ACTUAL'
+                              ? event.title.replace(/^OP /, 'op')
+                              : event.kind === 'DUE'
+                                ? 'due'
+                                : event.item_code}
                           </span>
                         </button>
                       ))}
-                      {events.length > 4 && (
-                        <div className="cal-more">+{events.length - 4} more</div>
+                      {events.length > DAY_CHIP_LIMIT && (
+                        <button
+                          type="button"
+                          className="cal-more"
+                          aria-expanded={expandedDays.has(key)}
+                          onClick={() =>
+                            setExpandedDays((current) => {
+                              const next = new Set(current)
+                              if (!next.delete(key)) next.add(key)
+                              return next
+                            })
+                          }
+                        >
+                          {expandedDays.has(key)
+                            ? 'Show less'
+                            : `+${events.length - DAY_CHIP_LIMIT} more`}
+                        </button>
                       )}
                     </div>
                   </div>
