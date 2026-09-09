@@ -21,16 +21,18 @@ from ...enums import (
     LocationType,
     LotStatus,
     MachineStatus,
+    MaintenanceStatus,
     NcrStatus,
     OperationStatus,
     OrderStatus,
 )
-from ...models.equipment import Machine
+from ...models.equipment import Machine, MaintenancePlan, MaintenanceRequest
 from ...models.inventory import StockLot
 from ...models.master import Location
 from ...models.production import OrderOperation, ProductionOrder
 from ...models.quality import Inspection, NonConformance
 from ...models.user import User
+from ...services import maintenance_service
 from ...schemas.workflow import (
     FlowStage,
     StatusNode,
@@ -71,6 +73,21 @@ def workflow_map(db: Session = Depends(get_db), _: User = Depends(get_current_us
     inspection_counts = _counts(db, Inspection.result, Inspection)
     ncr_counts = _counts(db, NonConformance.status, NonConformance)
     disposition_counts = _counts(db, NonConformance.disposition, NonConformance)
+    maintenance_counts = _counts(db, MaintenanceRequest.status, MaintenanceRequest)
+
+    # Preventive maintenance has no status column - a plan's state is where its
+    # next service falls relative to now, so it is counted rather than grouped.
+    pm_due = maintenance_service.due_report(db, within_days=14)
+    active_pm = int(
+        db.scalar(select(func.count(MaintenancePlan.id)).where(MaintenancePlan.is_active.is_(True))) or 0
+    )
+    pm_overdue = sum(1 for row in pm_due if row["is_overdue"])
+    pm_due_soon = len(pm_due) - pm_overdue
+    pm_counts = {
+        "SCHEDULED": max(active_pm - len(pm_due), 0),
+        "DUE": pm_due_soon,
+        "OVERDUE": pm_overdue,
+    }
 
     # Lots only count while they still hold stock - a consumed lot is history.
     lot_rows = db.execute(
@@ -200,6 +217,39 @@ def workflow_map(db: Session = Depends(get_db), _: User = Depends(get_current_us
             returns=[
                 {"from": "DOWN", "to": "IDLE", "label": "repaired"},
                 {"from": "MAINTENANCE", "to": "IDLE", "label": "back in service"},
+            ],
+        ),
+        WorkflowEntity(
+            key="maintenance_request",
+            label="Maintenance request",
+            hint="Raised against a machine after something goes wrong, or closed off by a service",
+            statuses=_nodes(
+                MaintenanceStatus,
+                maintenance_counts,
+                {"OPEN": "Open", "IN_PROGRESS": "In progress",
+                 "CLOSED": "Closed", "CANCELLED": "Cancelled"},
+                terminal={"CLOSED", "CANCELLED"},
+            ),
+            main_path=["OPEN", "IN_PROGRESS", "CLOSED"],
+            branches=[{"from": "OPEN", "to": "CANCELLED", "label": "not needed"}],
+        ),
+        WorkflowEntity(
+            key="maintenance_plan",
+            label="Preventive maintenance",
+            hint=(
+                "Where each plan's next service falls. Due and overdue work is reserved "
+                "on the machine, so the scheduler will not load through it"
+            ),
+            statuses=[
+                StatusNode(key="SCHEDULED", label="Scheduled", count=pm_counts["SCHEDULED"]),
+                StatusNode(key="DUE", label="Due within 14 days", count=pm_counts["DUE"]),
+                StatusNode(key="OVERDUE", label="Overdue", count=pm_counts["OVERDUE"]),
+            ],
+            main_path=["SCHEDULED", "DUE"],
+            branches=[{"from": "DUE", "to": "OVERDUE", "label": "not done in time"}],
+            # Doing the service is what resets the clock, from either state.
+            returns=[
+                {"from": "OVERDUE", "to": "SCHEDULED", "label": "serviced"},
             ],
         ),
     ]

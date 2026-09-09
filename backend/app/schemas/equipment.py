@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field, field_validator
 
-from ..enums import DowntimeCategory, MachineStatus
+from ..enums import DowntimeCategory, MachineStatus, MaintenancePriority, MaintenanceStatus
 from .common import ORMModel, to_local_naive
 from .master import WorkCenterRead
 
@@ -81,7 +81,7 @@ class MaintenanceRequestCreate(BaseModel):
     machine_id: int
     title: str = Field(min_length=1)
     description: str | None = None
-    priority: str = "NORMAL"
+    priority: MaintenancePriority = MaintenancePriority.NORMAL
 
 
 class MaintenanceRequestRead(ORMModel):
@@ -90,8 +90,8 @@ class MaintenanceRequestRead(ORMModel):
     machine_id: int
     title: str
     description: str | None = None
-    priority: str
-    status: str
+    priority: MaintenancePriority
+    status: MaintenanceStatus
     closed_at: datetime | None = None
     created_at: datetime
     machine: MachineRead

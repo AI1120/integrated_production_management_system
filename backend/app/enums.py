@@ -114,3 +114,16 @@ class MachineStatus(StrEnum):
 class DowntimeCategory(StrEnum):
     PLANNED = "PLANNED"
     UNPLANNED = "UNPLANNED"
+
+
+class MaintenanceStatus(StrEnum):
+    OPEN = "OPEN"
+    IN_PROGRESS = "IN_PROGRESS"
+    CLOSED = "CLOSED"
+    CANCELLED = "CANCELLED"
+
+
+class MaintenancePriority(StrEnum):
+    LOW = "LOW"
+    NORMAL = "NORMAL"
+    HIGH = "HIGH"

@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from ...database import get_db
-from ...enums import MachineStatus, Role
+from ...enums import MachineStatus, MaintenancePriority, MaintenanceStatus, Role
 from ...models.equipment import (
     DowntimeEvent,
     DowntimeReason,
@@ -239,7 +239,9 @@ def list_maintenance(
         selectinload(MaintenanceRequest.machine).selectinload(Machine.work_center)
     )
     if open_only:
-        stmt = stmt.where(MaintenanceRequest.status != "CLOSED")
+        stmt = stmt.where(
+            MaintenanceRequest.status.notin_([MaintenanceStatus.CLOSED, MaintenanceStatus.CANCELLED])
+        )
     return list(db.scalars(stmt.order_by(MaintenanceRequest.id.desc())))
 
 
@@ -265,7 +267,7 @@ def close_maintenance(
     request = db.get(MaintenanceRequest, request_id)
     if request is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Maintenance request not found")
-    request.status = "CLOSED"
+    request.status = MaintenanceStatus.CLOSED
     request.closed_at = datetime.now()
     db.commit()
     db.refresh(request)
@@ -378,8 +380,8 @@ def complete_maintenance_plan(
             machine_id=plan.machine_id,
             title=f"Preventive: {plan.name}",
             description=payload.note,
-            priority="NORMAL",
-            status="CLOSED",
+            priority=MaintenancePriority.NORMAL,
+            status=MaintenanceStatus.CLOSED,
             requested_by_id=user.id,
             closed_at=done_at,
         )

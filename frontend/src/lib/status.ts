@@ -69,6 +69,20 @@ export const DISPOSITION_TONE: Record<Disposition, Tone> = {
   RETURN_TO_SUPPLIER: 'warn',
 }
 
+export const MAINTENANCE_TONE: Record<string, Tone> = {
+  OPEN: 'warn',
+  IN_PROGRESS: 'info',
+  CLOSED: 'good',
+  CANCELLED: 'neutral',
+}
+
+/** Preventive maintenance has no status column - these are derived states. */
+export const MAINTENANCE_PLAN_TONE: Record<string, Tone> = {
+  SCHEDULED: 'good',
+  DUE: 'warn',
+  OVERDUE: 'bad',
+}
+
 /** Keyed by the `key` the /api/workflow endpoint gives each entity. */
 export const TONE_BY_ENTITY: Record<string, Record<string, Tone>> = {
   production_order: ORDER_TONE,
@@ -78,6 +92,8 @@ export const TONE_BY_ENTITY: Record<string, Record<string, Tone>> = {
   ncr: NCR_TONE,
   disposition: DISPOSITION_TONE,
   machine: MACHINE_TONE,
+  maintenance_request: MAINTENANCE_TONE,
+  maintenance_plan: MAINTENANCE_PLAN_TONE,
 }
 
 export const toneFor = (entityKey: string, statusKey: string): Tone =>

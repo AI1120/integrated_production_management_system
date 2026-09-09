@@ -5,7 +5,7 @@ from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Te
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base, EnumString, TimestampMixin
-from ..enums import DowntimeCategory, MachineStatus
+from ..enums import DowntimeCategory, MachineStatus, MaintenancePriority, MaintenanceStatus
 
 
 class Machine(Base, TimestampMixin):
@@ -65,8 +65,12 @@ class MaintenanceRequest(Base, TimestampMixin):
     machine_id: Mapped[int] = mapped_column(ForeignKey("machines.id"), index=True)
     title: Mapped[str] = mapped_column(String(160))
     description: Mapped[str | None] = mapped_column(Text, default=None)
-    priority: Mapped[str] = mapped_column(String(10), default="NORMAL")
-    status: Mapped[str] = mapped_column(String(20), default="OPEN")
+    priority: Mapped[MaintenancePriority] = mapped_column(
+        EnumString(MaintenancePriority, 10), default=MaintenancePriority.NORMAL
+    )
+    status: Mapped[MaintenanceStatus] = mapped_column(
+        EnumString(MaintenanceStatus, 20), default=MaintenanceStatus.OPEN
+    )
     requested_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), default=None)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)
 

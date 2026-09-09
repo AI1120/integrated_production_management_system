@@ -479,6 +479,53 @@ def main() -> int:
         check("restarting a machine clears its expected return",
               back_online["available_from"] is None, str(back_online["available_from"]))
 
+    # --- 10c. process map ----------------------------------------------------
+    print("")
+    print("10c. Process and status map")
+    _, wf = call("GET", "/workflow", token=planner, expect=200)
+    keys = [e["key"] for e in wf["entities"]]
+    check("the map publishes the material flow", len(wf["flow"]) > 0, str(len(wf["flow"])))
+    check("maintenance is on the map",
+          "maintenance_request" in keys and "maintenance_plan" in keys, str(keys))
+
+    # Every state has to be reachable on the drawing. A status that is neither on
+    # the happy path, nor a branch target, nor the source of a return edge, is
+    # rendered as a node with no edge touching it.
+    stranded = []
+    for entity in wf["entities"]:
+        # Reachability from the happy path, not merely "mentioned somewhere":
+        # a branch out of a state that is itself stranded connects nothing.
+        reached = set(entity["main_path"])
+        edges = list(entity["branches"]) + list(entity.get("returns", []))
+        growing = True
+        while growing:
+            growing = False
+            for edge in edges:
+                if edge["from"] in reached and edge["to"] not in reached:
+                    reached.add(edge["to"])
+                    growing = True
+        stranded += [f"{entity['key']}.{s['key']}"
+                     for s in entity["statuses"] if s["key"] not in reached]
+    check("every state is reachable from the happy path", not stranded, str(stranded))
+
+    machine = next(e for e in wf["entities"] if e["key"] == "machine")
+    check("a stopped machine has a way back to service",
+          any(r["to"] == "IDLE" for r in machine.get("returns", [])),
+          str(machine.get("returns")))
+
+    # Zero-filling is the point: an empty state still has to appear.
+    requests = next(e for e in wf["entities"] if e["key"] == "maintenance_request")
+    check("maintenance states are zero-filled, not hidden when empty",
+          {s["key"] for s in requests["statuses"]}
+          == {"OPEN", "IN_PROGRESS", "CLOSED", "CANCELLED"},
+          str([s["key"] for s in requests["statuses"]]))
+
+    plans = next(e for e in wf["entities"] if e["key"] == "maintenance_plan")
+    _, all_plans = call("GET", "/equipment/maintenance-plans", token=planner, expect=200)
+    check("preventive maintenance counts every active plan exactly once",
+          sum(s["count"] for s in plans["statuses"]) == len(all_plans),
+          f"{sum(s['count'] for s in plans['statuses'])} on the map vs {len(all_plans)} plans")
+
     # --- 11. dashboard ------------------------------------------------------
     print("\n11. Dashboard")
     _, dash = call("GET", "/dashboard?days=7", token=planner, expect=200)
