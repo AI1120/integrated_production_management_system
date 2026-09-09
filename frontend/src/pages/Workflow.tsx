@@ -23,7 +23,10 @@ function Legend() {
           {entry.label}
         </span>
       ))}
-      <span className="key muted">Dashed arrow = exception path · thick border = terminal state</span>
+      <span className="key muted">
+        Dashed arrow = exception path · green arrow = back to the happy path · thick border =
+        terminal state
+      </span>
     </div>
   )
 }

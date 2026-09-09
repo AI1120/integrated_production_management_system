@@ -20,6 +20,9 @@ class WorkflowEntity(BaseModel):
     # The happy path, in order. Anything not on it is reached via `branches`.
     main_path: list[str] = []
     branches: list[dict] = []
+    # Edges that lead back to the happy path. Without these a diagram reads as
+    # a one-way trip - a machine that breaks down and is never repaired.
+    returns: list[dict] = []
 
 
 class FlowStage(BaseModel):

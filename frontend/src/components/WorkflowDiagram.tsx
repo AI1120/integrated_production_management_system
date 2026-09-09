@@ -121,6 +121,78 @@ function Branch({
   )
 }
 
+/**
+ * Connector from a row-2 state back up to the main path.
+ *
+ * Drawn under the row rather than over it, and entering its target from below,
+ * so a recovery never gets mistaken for one of the forward arrows. Without
+ * these the machine diagram reads as a one-way trip: broken down, never fixed.
+ */
+function Return({
+  fromX,
+  toIndex,
+  label,
+  marker,
+  fanIndex = 0,
+}: {
+  fromX: number
+  toIndex: number
+  label?: string
+  marker: string
+  fanIndex?: number
+}) {
+  const x1 = fromX + NODE_W / 2
+  const y1 = ROW2_Y
+  const x2 = slot(toIndex) + NODE_W / 2
+  const y2 = ROW1_Y + NODE_H + 6
+  // Stagger so two recoveries into the same state do not trace one line.
+  const depth = 0.5 + 0.14 * Math.min(fanIndex, 3)
+  const turnY = y2 + (y1 - y2) * depth
+  return (
+    <g className="wf-branch return">
+      <path
+        className="wf-edge dashed return"
+        d={`M ${x1} ${y1} C ${x1} ${turnY}, ${x2} ${turnY}, ${x2} ${y2}`}
+        markerEnd={`url(#${marker})`}
+        fill="none"
+      />
+      {label && (
+        <text className="wf-edge-label" x={(x1 + x2) / 2} y={turnY + 4} textAnchor="middle">
+          {label}
+        </text>
+      )}
+    </g>
+  )
+}
+
+/** A transition between two states that both sit on the second row. */
+function SecondLevel({
+  fromX,
+  toX,
+  label,
+  marker,
+}: {
+  fromX: number
+  toX: number
+  label?: string
+  marker: string
+}) {
+  const forward = toX > fromX
+  const x1 = forward ? fromX + NODE_W : fromX
+  const x2 = forward ? toX - 6 : toX + NODE_W + 6
+  const y = ROW2_Y + NODE_H / 2
+  return (
+    <g className="wf-branch">
+      <line className="wf-edge dashed" x1={x1} y1={y} x2={x2} y2={y} markerEnd={`url(#${marker})`} />
+      {label && (
+        <text className="wf-edge-label" x={(x1 + x2) / 2} y={y - 7} textAnchor="middle">
+          {label}
+        </text>
+      )}
+    </g>
+  )
+}
+
 function Defs({ id }: { id: string }) {
   return (
     <defs>
@@ -251,6 +323,22 @@ export function StateMachineDiagram({ entity }: { entity: WorkflowEntity }) {
   const orphans = entity.statuses.filter((s) => !placed.has(s.key))
   const orphanX = orphans.map(() => slot(claim(0)))
 
+  // Where every second-row node ended up, so edges between them can be drawn.
+  const row2X = new Map<string, number>([
+    ...branches.map((b, i) => [b.to, branchX[i]] as const),
+    ...orphans.map((node, i) => [node.key, orphanX[i]] as const),
+  ])
+
+  // A transition whose source is itself a branch target used to be dropped in
+  // silence, leaving its destination floating with no edge into it at all.
+  const secondLevel = entity.branches.filter(
+    (b) => byKey.has(b.to) && !mainIndex.has(b.from) && row2X.has(b.from) && row2X.has(b.to),
+  )
+
+  const returns = (entity.returns ?? []).filter(
+    (r) => row2X.has(r.from) && mainIndex.has(r.to),
+  )
+
   const width = Math.max(
     slot(Math.max(main.length - 1, 0)) + NODE_W,
     ...branchX.map((x) => x + NODE_W),
@@ -323,6 +411,27 @@ export function StateMachineDiagram({ entity }: { entity: WorkflowEntity }) {
             count={node.count}
             tone={toneFor(entity.key, node.key)}
             terminal={node.terminal}
+          />
+        ))}
+
+        {secondLevel.map((b) => (
+          <SecondLevel
+            key={`${b.from}-${b.to}`}
+            fromX={row2X.get(b.from)!}
+            toX={row2X.get(b.to)!}
+            label={b.label}
+            marker={`${id}-arrow-muted`}
+          />
+        ))}
+
+        {returns.map((r, i) => (
+          <Return
+            key={`${r.from}-${r.to}`}
+            fromX={row2X.get(r.from)!}
+            toIndex={mainIndex.get(r.to)!}
+            label={r.label}
+            marker={`${id}-arrow-muted`}
+            fanIndex={returns.filter((o, j) => j < i && o.to === r.to).length}
           />
         ))}
       </svg>

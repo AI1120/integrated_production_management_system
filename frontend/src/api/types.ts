@@ -425,6 +425,8 @@ export interface WorkflowEntity {
   statuses: StatusNode[]
   main_path: string[]
   branches: { from: string; to: string; label?: string }[]
+  /** Edges back to the happy path, so a diagram is not a one-way trip. */
+  returns: { from: string; to: string; label?: string }[]
 }
 
 export interface FlowStage {

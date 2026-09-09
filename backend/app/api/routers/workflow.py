@@ -180,7 +180,10 @@ def workflow_map(db: Session = Depends(get_db), _: User = Depends(get_current_us
         WorkflowEntity(
             key="machine",
             label="Machine",
-            hint="A stop opens a downtime event; a restart closes it",
+            hint=(
+                "A stop opens a downtime event and takes the machine out of the "
+                "schedule until it is expected back; a restart closes both"
+            ),
             statuses=_nodes(
                 MachineStatus,
                 machine_counts,
@@ -188,9 +191,15 @@ def workflow_map(db: Session = Depends(get_db), _: User = Depends(get_current_us
                  "DOWN": "Down", "MAINTENANCE": "Maintenance"},
             ),
             main_path=["IDLE", "SETUP", "RUNNING"],
+            # Both stops are entered straight from the board, which is what the
+            # stop dialog actually does - it offers Down or Maintenance directly.
             branches=[
                 {"from": "RUNNING", "to": "DOWN", "label": "breakdown"},
-                {"from": "DOWN", "to": "MAINTENANCE", "label": "handover"},
+                {"from": "RUNNING", "to": "MAINTENANCE", "label": "planned stop"},
+            ],
+            returns=[
+                {"from": "DOWN", "to": "IDLE", "label": "repaired"},
+                {"from": "MAINTENANCE", "to": "IDLE", "label": "back in service"},
             ],
         ),
     ]
